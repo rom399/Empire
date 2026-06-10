@@ -1,5 +1,5 @@
 import * as http from "http";
-import { Middleware } from "./types";
+import { Middleware, Route, RouteHandler } from "./types";
 import { ILogger } from "./logging/ILogger";
 import { ConsoleLogger } from "./logging/ConsoleLogger";
 
@@ -17,6 +17,7 @@ export class Empire {
   private readonly _logger: ILogger;
 
   private readonly middlewares: Middleware[] = [];
+  private readonly routes: Route[] = [];
 
   constructor(options: EmpireOptions) {
     this.host = options.host;
@@ -30,24 +31,45 @@ export class Empire {
     );
   }
 
+private handleRoute(
+    req: http.IncomingMessage,
+    res: http.ServerResponse
+): void {
+
+    const path =
+        req.url?.split("?")[0] ?? "/";
+
+    const route =
+        this.routes.find(r =>
+            r.method === req.method &&
+            r.path === path
+        );
+
+    if (!route) {
+        res.statusCode = 404;
+        res.end("Route not found");
+        return;
+    }
+
+    route.handler(req, res);
+}
+
+
   private handleRequest(
     req: http.IncomingMessage,
     res: http.ServerResponse,
   ): void {
-
     let index = 0;
 
     const next = (): void => {
       const middleware = this.middlewares[index++];
 
-        if (middleware) {
-            middleware(req, res, next);
-            return;
-        };
+      if (middleware) {
+        middleware(req, res, next);
+        return;
+      }
 
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "text/plain");
-        res.end("Welcome to Empire");
+    this.handleRoute(req, res);
     };
     next();
   }
@@ -56,8 +78,20 @@ export class Empire {
     this.middlewares.push(middleware);
   }
 
-  public get logger(): ILogger {
-    return this._logger;
+  public get(path: string, handler: RouteHandler): void {
+    this.routes.push({
+      method: "GET",
+      path,
+      handler,
+    });
+  }
+
+  public post(path: string, handler: RouteHandler): void {
+    this.routes.push({
+      method: "POST",
+      path,
+      handler,
+    });
   }
 
   public start(): Promise<void> {
@@ -67,7 +101,7 @@ export class Empire {
       });
 
       this.server.listen(this.port, this.host, () => {
-        this.logger.info(
+        this._logger.info(
           `Empire server running at http://${this.host}:${this.port}/`,
         );
         resolve();

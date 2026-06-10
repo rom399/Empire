@@ -1,8 +1,7 @@
 import process from "process";
 import { Empire } from "./src/Empire";
-import {logger} from "./src/middleware/logger";
-import {auth} from "./src/middleware/auth";
-
+import { logger } from "./src/middleware/logger";
+import { auth } from "./src/middleware/auth";
 
 async function main() {
   const app = new Empire({
@@ -12,6 +11,14 @@ async function main() {
 
   app.use(logger);
   app.use(auth);
+
+  app.get("/", (req, res) => {
+    res.end("Hello, Empire!");
+  });
+
+  app.get("/health", (req, res) => {
+    res.end("OK");
+  });
 
   try {
     await app.start();
