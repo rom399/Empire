@@ -6,50 +6,15 @@ The goal of the project is to understand how modern web frameworks such as Expre
 
 ## Current Features
 
-* HTTP server
+* HTTP server built on Node.js
 * Configurable host and port
-* Graceful startup and shutdown
+* Promise-based startup lifecycle
+* Promise-based shutdown lifecycle
+* Graceful shutdown using SIGINT
+* Middleware registration (`app.use()`)
+* Pluggable logging abstraction (`ILogger`)
+* Built-in console logger with timestamps
 * TypeScript support
-
-## Roadmap
-
-### Phase 1
-
-* HTTP server
-* Start and stop lifecycle
-* Configuration
-
-### Phase 2
-
-* Middleware pipeline
-* Request processing
-* Logging middleware
-
-### Phase 3
-
-* Routing
-* Route parameters
-* Query string support
-
-### Phase 4
-
-* Context object
-* Request helpers
-* Response helpers
-
-### Phase 5
-
-* JSON body parsing
-* Validation
-
-### Phase 6
-
-* Error handling
-* Exception middleware
-
-### Phase 7
-
-* Static file serving
 
 ## Installation
 
@@ -60,12 +25,6 @@ npm install
 ## Running
 
 ```bash
-npm start
-```
-
-or
-
-```bash
 npx tsx server.ts
 ```
 
@@ -74,12 +33,63 @@ npx tsx server.ts
 ```ts
 import { Empire } from "./src/Empire";
 
+async function main() {
+
+    const app = new Empire({
+        host: "localhost",
+        port: 8008
+    });
+
+    await app.start();
+}
+
+main();
+```
+
+## Middleware
+
+Middleware can be registered using:
+
+```ts
+app.use(logger);
+app.use(auth);
+```
+
+Middleware executes in registration order.
+
+```text
+Request
+    |
+logger
+    |
+auth
+    |
+router
+    |
+Response
+```
+
+## Logging
+
+Empire provides a logging abstraction.
+
+```ts
+app.logger.info("Server starting");
+
+app.logger.error(
+    "Failed to start server",
+    err
+);
+```
+
+Custom loggers can be supplied by implementing the `ILogger` interface.
+
+```ts
 const app = new Empire({
     host: "localhost",
-    port: 8008
+    port: 8008,
+    logger: new MyCustomLogger()
 });
-
-await app.start();
 ```
 
 ## Project Structure
@@ -92,11 +102,22 @@ rom-server/
 ├── tsconfig.json
 ├── server.ts
 └── src/
+    ├── Empire.ts
+    ├── types.ts
+    ├── middleware/
+    └── logging/
 ```
 
 ## Motivation
 
-This project is primarily a learning exercise and a platform for experimenting with framework design, middleware pipelines, routing, and modern TypeScript development.
+This project is a learning exercise and a platform for experimenting with:
+
+* Framework design
+* Middleware pipelines
+* Routing
+* Request processing
+* Logging abstractions
+* Modern TypeScript development
 
 ## License
 

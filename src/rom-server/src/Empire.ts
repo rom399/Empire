@@ -14,7 +14,7 @@ export class Empire {
   private readonly port: number;
   private readonly server: http.Server;
 
-    private readonly _logger: ILogger;
+  private readonly _logger: ILogger;
 
   private readonly middlewares: Middleware[] = [];
 
@@ -22,7 +22,6 @@ export class Empire {
     this.host = options.host;
     this.port = options.port;
     this._logger = options.logger ?? new ConsoleLogger();
-
 
     this.server = http.createServer(
       (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -35,14 +34,27 @@ export class Empire {
     req: http.IncomingMessage,
     res: http.ServerResponse,
   ): void {
-    this.logger.info(`${req.method} ${req.url}`);
 
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "text/plain");
-    res.end("Welcome to Empire");
+    let index = 0;
+
+    const next = (): void => {
+      const middleware = this.middlewares[index++];
+
+        if (middleware) {
+            middleware(req, res, next);
+            return;
+        };
+
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "text/plain");
+        res.end("Welcome to Empire");
+    };
+    next();
   }
 
-  public use(middleware: Middleware): void {}
+  public use(middleware: Middleware): void {
+    this.middlewares.push(middleware);
+  }
 
   public get logger(): ILogger {
     return this._logger;

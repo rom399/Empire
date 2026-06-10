@@ -1,5 +1,8 @@
 import process from "process";
 import { Empire } from "./src/Empire";
+import {logger} from "./src/middleware/logger";
+import {auth} from "./src/middleware/auth";
+
 
 async function main() {
   const app = new Empire({
@@ -7,8 +10,8 @@ async function main() {
     port: 8008,
   });
 
-  //app.use(logger);
-  //app.use(auth);
+  app.use(logger);
+  app.use(auth);
 
   try {
     await app.start();

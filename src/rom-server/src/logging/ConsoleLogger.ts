@@ -1,29 +1,20 @@
 import { ILogger } from "./ILogger";
 
 export class ConsoleLogger implements ILogger {
-private write(
-    level: string,
-    message: string
-): void {
-
-    const timestamp =
-        new Date().toISOString();
+  private write(level: string, message: string): void {
+    const timestamp = new Date().toISOString();
 
     if (level === "[ERROR]") {
-        console.error(
-            `[${timestamp}]${level} ${message}`
-        );
+      console.error(`[${timestamp}]${level} ${message}`);
     } else {
-        console.log(
-            `[${timestamp}]${level} ${message}`
-        );
+      console.log(`[${timestamp}]${level} ${message}`);
     }
-}
+  }
 
   private formatMessage(message: unknown): string {
-    if( message instanceof Error) {
+    if (message instanceof Error) {
       return message.stack || message.message;
-    }else{
+    } else {
       return String(message);
     }
   }
@@ -40,25 +31,9 @@ private write(
     this.write("[DEBUG]", message);
   }
 
-public error(
-    message: string,
-    error?: unknown
-): void {
+  public error(message: string, error?: unknown): void {
+    const formatted = this.formatMessage(error);
 
-    const formatted =
-        this.formatMessage(error);
-
-    this.write(
-        "[ERROR]",
-        formatted
-            ? `${message}\n${formatted}`
-            : message
-    );
-}
-
-
-
-
-
-
+    this.write("[ERROR]", formatted ? `${message}\n${formatted}` : message);
+  }
 }
