@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Post 2 - Advanced Features</title>
+    <style>
+        body { font-family: Georgia, serif; margin: 0; padding: 0; background: #f9f9f9; }
+        article { max-width: 700px; margin: 40px auto; padding: 30px; background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-radius: 8px; }
+        h1 { color: #2c3e50; margin-top: 0; }
+        .meta { color: #7f8c8d; font-size: 14px; margin-bottom: 20px; }
+        code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+        pre { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        img { max-width: 100%; height: auto; margin: 20px 0; border-radius: 8px; }
+        a { color: #3498db; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <article>
+        <h1>Advanced Features of Empire</h1>
+        <p class="meta">Published on June 10, 2026 | By Empire Team</p>
+        
+        <img src="../images/sample1.png" alt="Advanced Features">
+        
+        <h2>Going Deeper</h2>
+        <p>Now that you know the basics, let's explore some advanced features that make Empire powerful.</p>
+        
+        <h2>Middleware System</h2>
+        <p>Empire supports a flexible middleware system that allows you to customize request handling:</p>
+        
+        <pre>const app = new Empire({ host: 'localhost', port: 8008 });
+// Middleware can be added here
+app.start();</pre>
+        
+        <img src="../images/sample2.png" alt="Middleware Architecture">
+        
+        <h2>Performance</h2>
+        <p>Empire is optimized for performance and can handle thousands of concurrent connections efficiently.</p>
+        
+        <p><a href="post1.html">← Previous Post</a> | <a href="../index.html">Back to Home</a></p>
+    </article>
+</body>
+</html>
