@@ -3,14 +3,17 @@ import http, { IncomingHttpHeaders } from "http";
 export class Context {
     public readonly req: http.IncomingMessage;
     public readonly res: http.ServerResponse;
+    public readonly params: Record<string, string>;
 
-    constructor(
-        req: http.IncomingMessage,
-        res: http.ServerResponse
-    ) {
-        this.req = req;
-        this.res = res;
-    }
+public constructor(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    params: Record<string, string> = {}
+) {
+    this.req = req;
+    this.res = res;
+    this.params = params;
+}
     
     public get headers(): IncomingHttpHeaders
     {
@@ -49,12 +52,6 @@ export class Context {
         );            
 
         this.res.end(value);
-    }
-
-    public get params(): Record<string, string>
-    {
-        let x = this.query;
-        return { "id": "meow1"};
     }
 
     public header(name: string, value: string) : this

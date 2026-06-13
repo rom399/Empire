@@ -5,6 +5,11 @@ import { ConsoleLogger } from "./logging/ConsoleLogger";
 import { Context } from "./Context";
 
 
+type RouteMatch = {
+    matched: boolean;
+    params: Record<string, string>;
+};
+
 export interface EmpireOptions {
   host: string;
   port: number;
@@ -33,6 +38,59 @@ export class Empire {
     );
   }
 
+private matchRoute(
+    routePath: string,
+    requestPath: string
+): RouteMatch {
+
+    const routeSegments =
+        routePath.split("/").filter(Boolean);
+
+    const requestSegments =
+        requestPath.split("/").filter(Boolean);
+
+    if (routeSegments.length !== requestSegments.length) {
+        return {
+            matched: false,
+            params: {}
+        };
+    }
+
+    const params: Record<string, string> = {};
+
+    for (let i = 0; i < routeSegments.length; i++) {
+
+        const routeSegment =
+            routeSegments[i];
+
+        const requestSegment =
+            requestSegments[i];
+
+        if (routeSegment.startsWith(":")) {
+
+            const paramName =
+                routeSegment.slice(1);
+
+            params[paramName] =
+                requestSegment;
+
+            continue;
+        }
+
+        if (routeSegment !== requestSegment) {
+            return {
+                matched: false,
+                params: {}
+            };
+        }
+    }
+
+    return {
+        matched: true,
+        params
+    };
+}
+
 private handleRoute(
     req: http.IncomingMessage,
     res: http.ServerResponse
@@ -41,21 +99,36 @@ private handleRoute(
     const path =
         req.url?.split("?")[0] ?? "/";
 
-    const route =
-        this.routes.find(r =>
-            r.method === req.method &&
-            r.path === path
-        );
+    for (const route of this.routes) {
 
-    if (!route) {
-        res.statusCode = 404;
-        res.end("Route not found");
+        if (route.method !== req.method) {
+            continue;
+        }
+
+        const match =
+            this.matchRoute(
+                route.path,
+                path
+            );
+
+        if (!match.matched) {
+            continue;
+        }
+
+        const ctx =
+            new Context(
+                req,
+                res,
+                match.params
+            );
+
+        route.handler(ctx);
+
         return;
     }
 
-    const ctx = new Context(req, res);
-
-    route.handler(ctx);
+    res.statusCode = 404;
+    res.end("Route not found");
 }
 
 
