@@ -2,6 +2,8 @@ import * as http from "http";
 import { Middleware, Route, RouteHandler } from "./types";
 import { ILogger } from "./logging/ILogger";
 import { ConsoleLogger } from "./logging/ConsoleLogger";
+import { Context } from "./Context";
+
 
 export interface EmpireOptions {
   host: string;
@@ -51,7 +53,9 @@ private handleRoute(
         return;
     }
 
-    route.handler(req, res);
+    const ctx = new Context(req, res);
+
+    route.handler(ctx);
 }
 
 
@@ -92,6 +96,10 @@ private handleRoute(
       path,
       handler,
     });
+  }
+
+  public get logger(): ILogger {
+    return this._logger;
   }
 
   public start(): Promise<void> {

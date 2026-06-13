@@ -12,12 +12,57 @@ async function main() {
   app.use(logger);
   app.use(auth);
 
-  app.get("/", (req, res) => {
-    res.end("Hello, Empire!");
+  app.get("/test/page", (ctx) => {
+    const page =
+      ctx.query.get("page");
+
+    ctx.html(`
+        <html>
+            <body>
+                <h1>Empire</h1>
+                <p>Page = ${page}</p>
+            </body>
+        </html>
+    `);
   });
 
-  app.get("/health", (req, res) => {
-    res.end("OK");
+  app.get("/", (ctx) => {
+    ctx.html(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>Empire</title>
+            </head>
+            <body>
+                <h1>Empire is running</h1>
+                <p>Hello from ctx.html()</p>
+            </body>
+        </html>
+    `);
+  });
+
+  app.get("/health", (ctx) => {
+    ctx.json({
+      status: "OK",
+      framework: "Empire"
+    });
+  });
+
+  app.get("/query", (ctx) => {
+    const page = ctx.query.get("page") ?? "not supplied";
+
+    ctx.json({
+      page
+    });
+  });
+
+
+  app.get("/users/:id", (ctx) => {
+
+      ctx.json({
+          id: ctx.params.id
+      });
+
   });
 
   try {

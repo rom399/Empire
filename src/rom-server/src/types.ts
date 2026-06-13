@@ -1,4 +1,5 @@
 import http from "http";
+import { Context } from "./Context";
 
 export type Middleware = (
   req: http.IncomingMessage,
@@ -7,8 +8,7 @@ export type Middleware = (
 ) => void;
 
 export type RouteHandler = (
-    req: http.IncomingMessage,
-    res: http.ServerResponse
+    ctx: Context
 ) => void;
 
 export interface Route {
