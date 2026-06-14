@@ -45,6 +45,21 @@ public constructor(
         );
     }
 
+    public async body() : Promise<string> {
+
+        const decoder = new TextDecoder('utf-8');
+
+        let data = '';
+        for await (const chunk of this.req)
+        {
+            data += decoder.decode(chunk as Uint8Array, {stream: true });
+        }
+        // Decoder flush.
+        data += decoder.decode();
+        
+        return data;
+    }
+
     public html(value: string): void {
 
         this.res.setHeader(
@@ -95,5 +110,10 @@ public constructor(
         this.res.end(
             JSON.stringify(value)
         );
+    }
+
+    public async jsonBody() : Promise<unknown> {
+        let body = await this.body();
+        return JSON.parse(body);
     }
 }

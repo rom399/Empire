@@ -1,0 +1,6 @@
+POST http://localhost:8008/json
+Content-Type: application/json
+
+{
+    "name": "Roman"
+}

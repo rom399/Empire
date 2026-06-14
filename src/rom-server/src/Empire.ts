@@ -32,8 +32,8 @@ export class Empire {
     this._logger = options.logger ?? new ConsoleLogger();
 
     this.server = http.createServer(
-      (req: http.IncomingMessage, res: http.ServerResponse) => {
-        this.handleRequest(req, res);
+      async (req: http.IncomingMessage, res: http.ServerResponse) => {
+        await this.handleRequest(req, res);
       },
     );
   }
@@ -91,10 +91,10 @@ private matchRoute(
     };
 }
 
-private handleRoute(
+private async handleRoute(
     req: http.IncomingMessage,
     res: http.ServerResponse
-): void {
+): Promise<void> {
 
     const path =
         req.url?.split("?")[0] ?? "/";
@@ -121,34 +121,54 @@ private handleRoute(
                 res,
                 match.params
             );
+        try{
 
-        route.handler(ctx);
+          await route.handler(ctx);
+        
+        }catch(err){
+          this.logger.error(
+            "Unhandled route error",
+            err
+          );
 
-        return;
+          if(!res.headersSent){
+            res.statusCode = 500;
+            res.setHeader(
+              "Content-Type",
+              "application/json"
+            );
+          
+            res.end(JSON.stringify({
+                error: "Internal Server Error"
+            }));
+        }
     }
+    return;
+  }
+
 
     res.statusCode = 404;
     res.end("Route not found");
 }
 
 
-  private handleRequest(
+  private async handleRequest(
     req: http.IncomingMessage,
     res: http.ServerResponse,
-  ): void {
+  ): Promise<void> {
     let index = 0;
 
-    const next = (): void => {
+    const next = async (): Promise<void> => {
       const middleware = this.middlewares[index++];
 
       if (middleware) {
-        middleware(req, res, next);
+        await middleware(req, res, next);
         return;
       }
 
-    this.handleRoute(req, res);
+    await this.handleRoute(req, res);
     };
-    next();
+    await next();
   }
 
   public use(middleware: Middleware): void {

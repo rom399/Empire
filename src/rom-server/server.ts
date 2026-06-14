@@ -59,11 +59,50 @@ async function main() {
 
   app.get("/users/:id", (ctx) => {
 
-      ctx.json({
-          id: ctx.params.id
-      });
+    ctx.json({
+      id: ctx.params.id
+    });
 
   });
+
+  app.post("/users", async (ctx) => {
+
+    const user = await ctx.jsonBody();
+
+  });
+
+  app.post("/json", async (ctx) => {
+
+    const body = await ctx.jsonBody();
+
+    ctx.json(body);
+
+  });
+
+
+  app.get("/form", (ctx) => {
+    ctx.html(`
+        <!DOCTYPE html>
+        <html>
+            <body>
+                <h1>User Form</h1>
+
+                <form method="post" action="/users">
+                    <input
+                        type="text"
+                        name="name"
+                        placeholder="Name"
+                    />
+
+                    <button type="submit">
+                        Submit
+                    </button>
+                </form>
+            </body>
+        </html>
+    `);
+  });
+
 
   try {
     await app.start();
