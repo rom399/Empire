@@ -18,6 +18,93 @@ Empire should eventually support:
 
 ---
 
+## Current Version
+
+0.7.0 - Static Files Complete
+
+---
+
+## Priority — Required Before Phase 10
+
+These items must be resolved before Dependency Injection work begins.
+They are gaps or breaking inconsistencies discovered when comparing the
+current implementation against the full roadmap.
+
+### 1. Middleware signature — breaking change required
+
+The current middleware signature is:
+
+```ts
+(req: IncomingMessage, res: ServerResponse, next: () => Promise<void>) => void
+```
+
+The roadmap requires a Context-based signature:
+
+```ts
+(ctx: Context, next: () => Promise<void>) => void | Promise<void>
+```
+
+Files affected:
+* `src/types.ts` — update Middleware type
+* `src/Empire.ts` — update handleRequest() to pass ctx instead of req/res
+* `src/middleware/LoggerMiddleware.ts` — update to use ctx
+* `src/middleware/AuthMiddleware.ts` — update to use ctx
+* `examples/03-middleware/server.ts` — update timingMiddleware
+* All other examples using app.use()
+
+### 2. form() body parsing — missing from Phase 5
+
+`ctx.form()` is listed as a completed feature in the roadmap but has not been implemented.
+
+Target API:
+
+```ts
+const data = await ctx.form();
+// data is Record<string, string> parsed from application/x-www-form-urlencoded
+```
+
+Files affected:
+* `src/http/Context.ts` — add form() method
+
+### 3. Static files API — inconsistency with roadmap
+
+The roadmap specifies a URL prefix parameter:
+
+```ts
+app.static("/public", "./wwwroot");
+```
+
+We implemented:
+
+```ts
+app.useStaticFiles("./wwwroot");
+```
+
+Decision needed: align the API to the roadmap or keep the current design.
+If aligning, files affected:
+* `src/Empire.ts` — update useStaticFiles() or rename to static()
+* `src/static/StaticFileOptions.ts` — add urlPrefix property
+* `src/static/StaticFileHandler.ts` — filter requests by URL prefix
+* All examples using static files
+
+### 4. Static file streaming — not implemented
+
+Files are currently read fully into memory with `fs.promises.readFile()`.
+Large files should be streamed using `fs.createReadStream()` and `stream.pipe()`.
+
+Files affected:
+* `src/static/StaticFileHandler.ts` — replace readFile with stream pipe
+
+### 5. Static file index.html fallback — not implemented
+
+Requests to a directory path (e.g. `/about/`) should fall back to serving
+`/about/index.html` if it exists.
+
+Files affected:
+* `src/static/StaticFileHandler.ts` — add index fallback logic
+
+---
+
 ## Phase 1 — Foundation
 
 ### Completed
@@ -50,6 +137,10 @@ Empire should eventually support:
 * LoggerMiddleware — logs method and URL for every request
 * AuthMiddleware — stub, ready for real auth logic
 
+### Remaining
+
+* Update middleware signature from (req, res, next) to (ctx, next) — see Priority section
+
 ---
 
 ## Phase 3 — Routing
@@ -66,7 +157,15 @@ Empire should eventually support:
 ### Remaining
 
 * PUT routes
+* PATCH routes
 * DELETE routes
+* OPTIONS routes
+* HEAD routes
+* Route groups
+* Route-level middleware
+* Wildcard routes
+* Optional parameters
+* Trailing slash support
 
 ---
 
@@ -88,6 +187,19 @@ Empire should eventually support:
 * ctx.header() — set a single response header
 * ctx.addHeaders() — set multiple response headers
 
+### Remaining
+
+* ctx.redirect()
+* ctx.file()
+* ctx.download()
+* ctx.stream()
+* ctx.cookie()
+* ctx.clearCookie()
+* ctx.accepts()
+* ctx.contentType()
+* ctx.ipAddress
+* ctx.userAgent
+
 ---
 
 ## Phase 5 — Request Bodies
@@ -99,6 +211,7 @@ Empire should eventually support:
 
 ### Remaining
 
+* ctx.form() — parse application/x-www-form-urlencoded body — see Priority section
 * Request size limits
 
 ---
@@ -134,8 +247,14 @@ Empire should eventually support:
 
 ### Remaining
 
-* File caching / cache headers
-* Index file fallback (serve index.html for directory requests)
+* URL prefix support — app.static("/public", "./wwwroot") — see Priority section
+* Stream files instead of reading fully into memory — see Priority section
+* Index.html fallback for directory requests — see Priority section
+* Cache headers (ETag, Last-Modified, Cache-Control)
+* In-memory file cache with configurable size limit
+* LRU cache eviction strategy
+* Cache entry TTL
+* File access frequency tracking
 
 ---
 
@@ -144,7 +263,7 @@ Empire should eventually support:
 ### Completed
 
 * npm start — runs examples/basic-server/server.ts via tsx
-* Example application — examples/basic-server/server.ts
+* Example applications — 01 through 05 covering all implemented features
 * API test files — tests/http/empire.http, tests/http/invalid-json.http
 * .npmignore — excludes src/, tests/, examples/ from npm publish
 * Project restructured to Empire layout
@@ -171,7 +290,7 @@ Empire should eventually support:
 * tests/unit/ — directory structure ready for Vitest (logging, middleware, static, di)
 * tests/http/ — REST client test files
 * tests/fixtures/static/ — static file test assets
-* examples/basic-server/ — demo application
+* examples/ — five numbered example applications
 
 ---
 
@@ -193,31 +312,141 @@ const logger = app.services.resolve(ILogger);
 * ServiceCollection class — addSingleton(), addTransient(), addScoped()
 * ServiceProvider class — resolve(), builds and caches instances
 * Integration with Empire class via app.services
+* Integration with Context via ctx.services
 
 ---
 
-## Future Ideas
+## Phase 11 — Validation
 
-### Configuration
+### Tasks
+
+* Body validation
+* Query validation
+* Route parameter validation
+* Schema validation
+* ValidationException
+* Automatic 400 responses
+
+---
+
+## Phase 12 — Authentication
+
+Target API:
+
+```ts
+app.use(JwtMiddleware({ secret: "..." }));
+```
+
+### Tasks
+
+* JWT authentication middleware
+* Cookie-based authentication
+* Bearer token extraction
+* Role-based authorization
+* Policy-based authorization
+
+---
+
+## Phase 13 — Configuration
+
+Target API:
 
 ```ts
 app.configuration.get("Database");
 ```
 
-### Controllers
+### Tasks
 
-```ts
-app.controller(UserController);
-```
-
-### OpenAPI / Swagger
-
-```ts
-app.useSwagger();
-```
+* appsettings.json provider
+* Environment variable provider
+* Command line provider
+* Strongly typed configuration
+* Options pattern
 
 ---
 
-## Current Version
+## Phase 14 — Controllers
 
-0.7.0 - Static Files Complete
+Target API:
+
+```ts
+@Controller("/users")
+class UserController {
+}
+```
+
+### Tasks
+
+* Controller discovery
+* Route generation from decorators
+* Constructor injection
+* Action execution
+
+---
+
+## Phase 15 — Advanced Dependency Injection
+
+### Tasks
+
+* Constructor injection
+* Scoped lifetime
+* Factory registrations
+* Circular dependency detection
+* Open generics
+
+---
+
+## Phase 16 — HTTP Features
+
+### Tasks
+
+* Compression
+* CORS middleware
+* Response caching
+* Request size limits
+* Multipart uploads
+* File uploads
+
+---
+
+## Phase 17 — Testing
+
+### Tasks
+
+* Unit tests — Vitest
+* Integration tests
+* Routing tests
+* Middleware tests
+* Context tests
+* Error handling tests
+
+---
+
+## Phase 18 — Advanced Features
+
+### Tasks
+
+* WebSockets
+* Server Sent Events
+* Hosted services
+* Background services
+* Health checks
+* Metrics
+* OpenAPI generation
+* Rate limiting
+* OpenTelemetry
+
+---
+
+## Long-Term Ideas
+
+* MVC
+* Plugin system
+* Module system
+* CLI tooling
+* Project templates
+* ORM integration
+* Database migrations
+* HTTP/2
+* HTTP/3
+* gRPC
