@@ -1,0 +1,11 @@
+# Test files
+tests/
+
+# Examples
+examples/
+
+# TypeScript source (publish compiled JS only)
+src/
+
+# Config
+tsconfig.json

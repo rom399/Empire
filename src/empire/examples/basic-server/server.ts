@@ -1,7 +1,7 @@
 import process from "process";
-import { Empire } from "./src/Empire";
-import { logger } from "./src/middleware/logger";
-import { auth } from "./src/middleware/auth";
+import { Empire } from "../../src/Empire";
+import { logger } from "../../src/middleware/LoggerMiddleware";
+import { auth } from "../../src/middleware/AuthMiddleware";
 
 async function main() {
   const app = new Empire({

@@ -1,5 +1,5 @@
 import http from "http";
-import { Context } from "./Context";
+import { Context } from "./http/Context";
 
 export type Middleware = (
   req: http.IncomingMessage,

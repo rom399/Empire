@@ -1,11 +1,11 @@
 {
-  "name": "rom-server",
+  "name": "empire",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "tsx server.ts"
+    "start": "tsx examples/basic-server/server.ts"
   },
   "keywords": [],
   "author": "",

@@ -11,6 +11,6 @@
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist"
   },
-  "include": ["server.ts", "src/**/*"],
+  "include": ["src/**/*", "examples/**/*"],
   "exclude": ["node_modules", "dist"]
 }

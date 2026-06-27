@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { Context } from "../Context";
+import { Context } from "../http/Context";
 import { MimeTypes } from "./MimeTypes";
 import { StaticFileOptions } from "./StaticFileOptions";
 

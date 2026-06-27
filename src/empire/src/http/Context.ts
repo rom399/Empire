@@ -1,5 +1,5 @@
 import http, { IncomingHttpHeaders } from "http";
-import { BadRequestError } from "./Types/BadRequestError";
+import { BadRequestError } from "../errors/BadRequestError";
 
 export class Context {
     public readonly req: http.IncomingMessage;

@@ -2,8 +2,8 @@ import * as http from "http";
 import { Middleware, Route, RouteHandler } from "./types";
 import { ILogger } from "./logging/ILogger";
 import { ConsoleLogger } from "./logging/ConsoleLogger";
-import { Context } from "./Context";
-import { HttpError } from "./Types/HttpError";
+import { Context } from "./http/Context";
+import { HttpError } from "./errors/HttpError";
 import { StaticFileHandler } from "./static/StaticFileHandler";
 
 type RouteMatch = {
