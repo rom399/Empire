@@ -1,7 +1,7 @@
 import process from "process";
 import { Empire } from "../../src/Empire";
-import { logger } from "../../src/middleware/LoggerMiddleware";
-import { auth } from "../../src/middleware/AuthMiddleware";
+import { LoggerMiddleware } from "../../src/middleware/LoggerMiddleware";
+import { AuthMiddleware } from "../../src/middleware/AuthMiddleware";
 
 async function main() {
   const app = new Empire({
@@ -9,8 +9,8 @@ async function main() {
     port: 8008,
   });
 
-  app.use(logger);
-  app.use(auth);
+  app.use(LoggerMiddleware);
+  app.use(AuthMiddleware);
 
   app.get("/test/page", (ctx) => {
     const page =

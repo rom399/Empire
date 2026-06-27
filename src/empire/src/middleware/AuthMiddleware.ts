@@ -1,6 +1,6 @@
 import { Middleware } from "../types";
 
-export const auth: Middleware = (
+export const AuthMiddleware: Middleware = (
     req,
     res,
     next
