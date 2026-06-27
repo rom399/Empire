@@ -45,132 +45,158 @@ Empire should eventually support:
 * Middleware type definition
 * Middleware collection
 * app.use() registration
-
-### In Progress
-
 * Middleware execution pipeline
-
-### Remaining
-
 * Async middleware support
-* Middleware error handling
-* Route-specific middleware
-
-Target API:
-
-```ts
-app.use(logger);
-app.use(auth);
-```
+* LoggerMiddleware — logs method and URL for every request
+* AuthMiddleware — stub, ready for real auth logic
 
 ---
 
 ## Phase 3 — Routing
 
-Target API:
-
-```ts
-app.get("/", (ctx) => {
-    ctx.text("Hello World");
-});
-
-app.post("/users", (ctx) => {
-    ctx.json({ created: true });
-});
-```
-
-### Tasks
+### Completed
 
 * Route table
-* GET routes
-* POST routes
+* GET routes via app.get()
+* POST routes via app.post()
+* Route matching with segment comparison
+* URL parameter extraction — /users/:id → ctx.params.id
+* 404 handling — Route not found response
+
+### Remaining
+
 * PUT routes
 * DELETE routes
-* Route matching
-* 404 handling
 
 ---
 
 ## Phase 4 — Context
 
-Target API:
+### Completed
 
-```ts
-ctx.req
-ctx.res
-ctx.path
-ctx.method
-ctx.query
-ctx.text()
-ctx.json()
-ctx.status()
-```
-
-### Tasks
-
-* Context object
-* Query string parsing
-* Response helpers
-* Request helpers
+* Context class — wraps req and res
+* ctx.req / ctx.res — raw Node objects
+* ctx.path — request pathname
+* ctx.method — HTTP method
+* ctx.query — URLSearchParams from the URL
+* ctx.params — route parameters
+* ctx.headers — incoming request headers
+* ctx.text() — plain text response
+* ctx.json() — JSON response with Content-Type header
+* ctx.html() — HTML response with Content-Type header
+* ctx.status() — chainable status code setter
+* ctx.header() — set a single response header
+* ctx.addHeaders() — set multiple response headers
 
 ---
 
 ## Phase 5 — Request Bodies
 
-### Tasks
+### Completed
 
-* Request stream reading
-* JSON body parsing
-* Invalid JSON handling
+* ctx.body() — reads full request stream as string
+* ctx.jsonBody() — parses JSON body, throws BadRequestError on invalid JSON
+
+### Remaining
+
 * Request size limits
 
 ---
 
 ## Phase 6 — Error Handling
 
-### Tasks
+### Completed
 
-* Global error handling
+* HttpError base class — statusCode + message
+* BadRequestError — extends HttpError with status 400
+* Route handler catches HttpError and returns its status code and message as JSON
+* Unhandled errors return 500 Internal Server Error
+* Invalid JSON body throws BadRequestError automatically
+
+### Remaining
+
 * Middleware exception handling
-* Development error responses
-* Production error responses
+* Development vs production error responses
 
 ---
 
 ## Phase 7 — Static Files
 
-### Tasks
+### Completed
 
-* Static file middleware
-* MIME type support
-* Path traversal protection
-* File caching
+* app.useStaticFiles(root) — registers static file middleware
+* MimeTypes class — maps 14 file extensions to MIME types, falls back to application/octet-stream
+* StaticFileOptions interface — root directory configuration
+* StaticFileHandler class — resolves, validates, and serves files from disk
+* Path traversal protection — 403 Forbidden on attempted escape
+* Directory serving blocked — stat.isFile() check
+* Falls through to routing if file not found
+
+### Remaining
+
+* File caching / cache headers
+* Index file fallback (serve index.html for directory requests)
 
 ---
 
 ## Phase 8 — Developer Experience
 
-### Tasks
+### Completed
 
-* npm run dev
-* npm run build
-* npm start
-* Example applications
-* API test files
+* npm start — runs examples/basic-server/server.ts via tsx
+* Example application — examples/basic-server/server.ts
+* API test files — tests/http/empire.http, tests/http/invalid-json.http
+* .npmignore — excludes src/, tests/, examples/ from npm publish
+* Project restructured to Empire layout
+
+### Remaining
+
+* npm run dev — watch mode with auto-restart
+* npm run build — compile TypeScript to dist/
 * Documentation
 
 ---
 
-## Future Ideas
+## Phase 9 — Project Structure
 
-### Dependency Injection
+### Completed
+
+* Project renamed from rom-server to empire
+* src/http/ — Context lives here
+* src/errors/ — HttpError, BadRequestError
+* src/middleware/ — PascalCase filenames (AuthMiddleware, LoggerMiddleware)
+* src/static/ — MimeTypes, StaticFileHandler, StaticFileOptions
+* src/di/ — placeholder directory for Phase 10
+* src/logging/ — ILogger, ConsoleLogger
+* tests/unit/ — directory structure ready for Vitest (logging, middleware, static, di)
+* tests/http/ — REST client test files
+* tests/fixtures/static/ — static file test assets
+* examples/basic-server/ — demo application
+
+---
+
+## Phase 10 — Dependency Injection
+
+Target API:
 
 ```ts
-app.services.addSingleton(
-    ILogger,
-    ConsoleLogger
-);
+app.services.addSingleton(ILogger, ConsoleLogger);
+app.services.addTransient(IUserService, UserService);
+
+const logger = app.services.resolve(ILogger);
 ```
+
+### Tasks
+
+* ServiceLifetime enum — Singleton, Transient, Scoped
+* ServiceDescriptor class — holds token, implementation, lifetime
+* ServiceCollection class — addSingleton(), addTransient(), addScoped()
+* ServiceProvider class — resolve(), builds and caches instances
+* Integration with Empire class via app.services
+
+---
+
+## Future Ideas
 
 ### Configuration
 
@@ -192,15 +218,6 @@ app.useSwagger();
 
 ---
 
-## Current Priority
-
-1. Complete middleware execution pipeline
-2. Add request context object
-3. Implement routing
-4. Add route parameters
-5. Add JSON responses
-6. Add request body parsing
-
 ## Current Version
 
-0.1.0 - Foundation Complete
+0.7.0 - Static Files Complete
