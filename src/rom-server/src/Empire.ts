@@ -3,7 +3,8 @@ import { Middleware, Route, RouteHandler } from "./types";
 import { ILogger } from "./logging/ILogger";
 import { ConsoleLogger } from "./logging/ConsoleLogger";
 import { Context } from "./Context";
-
+import { HttpError } from "./Types/HttpError";
+import { StaticFileHandler } from "./static/StaticFileHandler";
 
 type RouteMatch = {
     matched: boolean;
@@ -38,119 +39,105 @@ export class Empire {
     );
   }
 
-private matchRoute(
+  private matchRoute(
     routePath: string,
     requestPath: string
-): RouteMatch {
+  ): RouteMatch {
 
     const routeSegments =
-        routePath.split("/").filter(Boolean);
+      routePath.split("/").filter(Boolean);
 
     const requestSegments =
-        requestPath.split("/").filter(Boolean);
+      requestPath.split("/").filter(Boolean);
 
     if (routeSegments.length !== requestSegments.length) {
-        return {
-            matched: false,
-            params: {}
-        };
+      return {
+        matched: false,
+        params: {}
+      };
     }
 
     const params: Record<string, string> = {};
 
     for (let i = 0; i < routeSegments.length; i++) {
 
-        const routeSegment =
-            routeSegments[i];
+      const routeSegment = routeSegments[i];
+      const requestSegment = requestSegments[i];
 
-        const requestSegment =
-            requestSegments[i];
+      if (routeSegment.startsWith(":")) {
 
-        if (routeSegment.startsWith(":")) {
+        const paramName = routeSegment.slice(1);
+        params[paramName] = requestSegment;
 
-            const paramName =
-                routeSegment.slice(1);
+        continue;
+      }
 
-            params[paramName] =
-                requestSegment;
-
-            continue;
-        }
-
-        if (routeSegment !== requestSegment) {
-            return {
-                matched: false,
-                params: {}
-            };
-        }
+      if (routeSegment !== requestSegment) {
+        return {
+          matched: false,
+          params: {}
+        };
+      }
     }
 
     return {
-        matched: true,
-        params
+      matched: true,
+      params
     };
-}
+  }
 
-private async handleRoute(
+  private async handleRoute(
     req: http.IncomingMessage,
     res: http.ServerResponse
-): Promise<void> {
+  ): Promise<void> {
 
-    const path =
-        req.url?.split("?")[0] ?? "/";
+    const path = req.url?.split("?")[0] ?? "/";
 
     for (const route of this.routes) {
 
-        if (route.method !== req.method) {
-            continue;
+      if (route.method !== req.method) {
+        continue;
+      }
+
+      const match = this.matchRoute(route.path, path);
+
+      if (!match.matched) {
+        continue;
+      }
+
+      const ctx = new Context(req, res, match.params);
+
+      try {
+
+        await route.handler(ctx);
+
+      } catch (err) {
+
+        this.logger.error("Unhandled route error", err);
+
+        if (!res.headersSent) {
+
+          if (err instanceof HttpError) {
+
+            res.statusCode = err.statusCode;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: err.message }));
+
+            return;
+          }
+
+          res.statusCode = 500;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: "Internal Server Error" }));
         }
+      }
 
-        const match =
-            this.matchRoute(
-                route.path,
-                path
-            );
-
-        if (!match.matched) {
-            continue;
-        }
-
-        const ctx =
-            new Context(
-                req,
-                res,
-                match.params
-            );
-        try{
-
-          await route.handler(ctx);
-        
-        }catch(err){
-          this.logger.error(
-            "Unhandled route error",
-            err
-          );
-
-          if(!res.headersSent){
-            res.statusCode = 500;
-            res.setHeader(
-              "Content-Type",
-              "application/json"
-            );
-          
-            res.end(JSON.stringify({
-                error: "Internal Server Error"
-            }));
-        }
+      return;
     }
-    return;
-  }
-
 
     res.statusCode = 404;
     res.end("Route not found");
-}
-
+  }
 
   private async handleRequest(
     req: http.IncomingMessage,
@@ -166,13 +153,32 @@ private async handleRoute(
         return;
       }
 
-    await this.handleRoute(req, res);
+      await this.handleRoute(req, res);
     };
+
     await next();
   }
 
   public use(middleware: Middleware): void {
     this.middlewares.push(middleware);
+  }
+
+  public useStaticFiles(root: string): void {
+
+    const handler = new StaticFileHandler({ root });
+
+    const middleware: Middleware = async (req, res, next) => {
+
+      const ctx = new Context(req, res);
+
+      const wasHandled = await handler.handle(ctx);
+
+      if (!wasHandled) {
+        await next();
+      }
+    };
+
+    this.use(middleware);
   }
 
   public get(path: string, handler: RouteHandler): void {

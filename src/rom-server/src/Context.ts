@@ -1,22 +1,22 @@
 import http, { IncomingHttpHeaders } from "http";
+import { BadRequestError } from "./Types/BadRequestError";
 
 export class Context {
     public readonly req: http.IncomingMessage;
     public readonly res: http.ServerResponse;
     public readonly params: Record<string, string>;
 
-public constructor(
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-    params: Record<string, string> = {}
-) {
-    this.req = req;
-    this.res = res;
-    this.params = params;
-}
-    
-    public get headers(): IncomingHttpHeaders
-    {
+    public constructor(
+        req: http.IncomingMessage,
+        res: http.ServerResponse,
+        params: Record<string, string> = {}
+    ) {
+        this.req = req;
+        this.res = res;
+        this.params = params;
+    }
+
+    public get headers(): IncomingHttpHeaders {
         return this.req.headers;
     }
 
@@ -32,7 +32,7 @@ public constructor(
 
         return this.url.searchParams;
     }
-    
+
     private get url(): URL {
 
         const host =
@@ -45,18 +45,17 @@ public constructor(
         );
     }
 
-    public async body() : Promise<string> {
+    public async body(): Promise<string> {
 
         const decoder = new TextDecoder('utf-8');
 
         let data = '';
-        for await (const chunk of this.req)
-        {
-            data += decoder.decode(chunk as Uint8Array, {stream: true });
+        for await (const chunk of this.req) {
+            data += decoder.decode(chunk as Uint8Array, { stream: true });
         }
         // Decoder flush.
         data += decoder.decode();
-        
+
         return data;
     }
 
@@ -64,19 +63,17 @@ public constructor(
 
         this.res.setHeader(
             "Content-Type", "text/html"
-        );            
+        );
 
         this.res.end(value);
     }
 
-    public header(name: string, value: string) : this
-    {   
+    public header(name: string, value: string): this {
         this.res.setHeader(name, value);
         return this;
     }
 
-    public addHeaders(headers: IncomingHttpHeaders | Record<string, string>) : this
-    {
+    public addHeaders(headers: IncomingHttpHeaders | Record<string, string>): this {
         for (const [name, value] of Object.entries(headers)) {
             if (value !== undefined && value !== null) {
                 // IncomingHttpHeaders may have string | string[] values; cast to any
@@ -92,7 +89,7 @@ public constructor(
         return this;
     }
 
-    public text(value: string) : void {
+    public text(value: string): void {
         this.res.setHeader(
             "Content-Type",
             "text/plain"
@@ -102,7 +99,7 @@ public constructor(
     }
 
     public json(value: unknown): void {
-         this.res.setHeader(
+        this.res.setHeader(
             "Content-Type",
             "application/json"
         );
@@ -112,8 +109,13 @@ public constructor(
         );
     }
 
-    public async jsonBody() : Promise<unknown> {
+    public async jsonBody(): Promise<unknown> {
         let body = await this.body();
-        return JSON.parse(body);
+
+        try {
+            return JSON.parse(body);
+        } catch (error) {
+            throw new BadRequestError("Invalid JSON");
+        }
     }
 }
