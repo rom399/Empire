@@ -33,6 +33,31 @@ export class Context {
         return this.url.searchParams;
     }
 
+    public get ipAddress(): string {
+        // Check forwarded headers first — set by proxies and load balancers
+        const forwarded = this.req.headers["x-forwarded-for"];
+
+        if (forwarded) {
+            // x-forwarded-for can be a comma separated list — first is the real client
+            const first = Array.isArray(forwarded) 
+                ? forwarded[0] 
+                : forwarded.split(",")[0];
+            return first.trim();
+        }
+
+        const raw = this.req.socket.remoteAddress ?? "unknown";
+
+        if (raw.startsWith("::ffff:")) {
+            return raw.substring(7);
+        }
+
+        if (raw === "::1") {
+            return "127.0.0.1";
+        }
+
+        return raw;
+    }
+    
     private get url(): URL {
 
         const host =

@@ -20,7 +20,15 @@ Empire should eventually support:
 
 ## Current Version
 
-0.7.0 - Static Files Complete
+0.7.0 — Static Files Complete
+
+**v1.0.0 blockers:**
+* Context API freeze — all v1 Context members implemented
+* React application support — index.html fallback and React Router fallback
+* Middleware signature migration to Context-based
+* ctx.form() body parsing
+* Static file streaming
+* Router refactor out of Empire.ts
 
 ---
 
@@ -29,6 +37,79 @@ Empire should eventually support:
 These items must be resolved before Dependency Injection work begins.
 They are gaps or breaking inconsistencies discovered when comparing the
 current implementation against the full roadmap.
+
+### 0. Context API freeze — no breaking changes after v1
+
+The Context API must be finalised before v1 is released. Every version
+after v1 must remain backward compatible. Any method added post-v1 must
+be additive only — no signature changes, no removals.
+
+The following Context members must be implemented before v1:
+
+**Response helpers**
+* ctx.redirect(url, status?) — redirect to another URL
+* ctx.file(path) — serve a file from a route handler
+* ctx.download(path, filename?) — force file download via Content-Disposition
+
+**Request helpers**
+* ctx.ipAddress — resolved client IP, handles proxies and IPv6 normalisation
+* ctx.userAgent — User-Agent header shorthand
+* ctx.contentType — Content-Type of the incoming request
+* ctx.accepts(type) — check what response types the client accepts
+
+**Cookies**
+* ctx.cookie(name, value, options?) — set a cookie on the response
+* ctx.clearCookie(name) — clear a cookie by setting expired date
+
+**Post-v1 only (depends on DI)**
+* ctx.services — added after Phase 10 Dependency Injection is complete
+
+Files affected:
+* `src/http/Context.ts` — all additions go here
+
+---
+
+### 0b. React Application Support — required before v1
+
+Empire must be able to serve a React application before v1 is released.
+This is a core use case and must work without breaking changes post-v1.
+
+**What is needed:**
+
+* Index.html fallback for directory requests — e.g. `/about/` serves `/about/index.html`
+* React Router fallback — any path that does not match a file or route serves
+  the root `/index.html` so React Router can handle client-side routing
+* Static file streaming — large JS bundles and assets should stream rather
+  than load fully into memory
+* Correct MIME types for `.js`, `.css`, `.map`, `.woff`, `.woff2` — already
+  partially covered, verify all React build output types are handled
+
+**Target usage:**
+
+```ts
+const app = new Empire({ host: "localhost", port: 3000 });
+
+// Serve React build output
+app.useStaticFiles("./dist");
+
+// API routes — matched before React fallback
+app.get("/api/users", (ctx) => {
+    ctx.json({ users: [] });
+});
+
+await app.start();
+```
+
+**Behaviour:**
+* `/` → serves `dist/index.html`
+* `/about` → no file match → serves `dist/index.html` → React Router renders `/about`
+* `/api/users` → matched by route handler → returns JSON
+* `/assets/main.js` → serves `dist/assets/main.js` directly
+* `/favicon.ico` → serves `dist/favicon.ico` directly
+
+Files affected:
+* `src/static/StaticFileHandler.ts` — index.html fallback and React Router fallback
+* `src/static/MimeTypes.ts` — verify all React build output MIME types are present
 
 ### 1. Middleware signature — breaking change required
 
@@ -139,7 +220,8 @@ Files affected:
 
 ### Remaining
 
-* Update middleware signature from (req, res, next) to (ctx, next) — see Priority section
+* Migrate middleware to Context-based signature:
+  `(ctx, next) => void | Promise<void>`
 
 ---
 
@@ -189,16 +271,22 @@ Files affected:
 
 ### Remaining
 
-* ctx.redirect()
-* ctx.file()
-* ctx.download()
-* ctx.stream()
-* ctx.cookie()
-* ctx.clearCookie()
-* ctx.accepts()
-* ctx.contentType()
-* ctx.ipAddress
-* ctx.userAgent
+**Required before v1 — API freeze**
+* ctx.redirect(url, status?) — redirect to another URL
+* ctx.file(path) — serve a file from a route handler
+* ctx.download(path, filename?) — force file download via Content-Disposition
+* ctx.ipAddress — resolved client IP, handles proxies and IPv6 normalisation
+* ctx.userAgent — User-Agent header shorthand
+* ctx.contentType — Content-Type of the incoming request
+* ctx.accepts(type) — check what response types the client accepts
+* ctx.cookie(name, value, options?) — set a cookie on the response
+* ctx.clearCookie(name) — clear a cookie by name
+
+**Post-v1 only (depends on Phase 10)**
+* ctx.services — ServiceProvider available per request after DI is implemented
+
+**Post-v1**
+* ctx.stream() — stream a readable to the response
 
 ---
 
@@ -247,9 +335,16 @@ Files affected:
 
 ### Remaining
 
-* URL prefix support — app.static("/public", "./wwwroot") — see Priority section
-* Stream files instead of reading fully into memory — see Priority section
+**Required before v1 — React support**
 * Index.html fallback for directory requests — see Priority section
+* React Router fallback — serve root index.html for unmatched paths
+* Stream files instead of reading fully into memory — see Priority section
+* Verify MIME types cover all React build output — .js, .css, .map, .woff, .woff2, .woff, .ttf, .eot
+
+**Required before v1 — API alignment**
+* URL prefix support — app.static("/public", "./wwwroot") — see Priority section
+
+**Post v1**
 * Cache headers (ETag, Last-Modified, Cache-Control)
 * In-memory file cache with configurable size limit
 * LRU cache eviction strategy
@@ -274,6 +369,11 @@ Files affected:
 * npm run build — compile TypeScript to dist/
 * Documentation
 
+**Examples to add before v1**
+* `examples/06-react-app/` — serve a built React application with React Router support
+* `examples/06-react-app/client/` — minimal React app with React Router for testing
+* `examples/06-react-app/server.ts` — Empire serving the React build output with API routes
+
 ---
 
 ## Phase 9 — Project Structure
@@ -291,6 +391,43 @@ Files affected:
 * tests/http/ — REST client test files
 * tests/fixtures/static/ — static file test assets
 * examples/ — five numbered example applications
+
+### Remaining
+
+#### Routing Refactor
+
+Move routing responsibilities out of `Empire.ts` into a dedicated routing package.
+
+**Goals**
+
+* [ ] Create `src/routing/Route.ts` — represents a single registered route
+* [ ] Create `src/routing/RouteMatch.ts` — represents the result of route matching
+* [ ] Create `src/routing/RouteMatcher.ts` — matches request paths and extracts parameters
+* [ ] Create `src/routing/Router.ts` — owns route registration and request dispatching
+
+**Refactor Tasks**
+
+* [ ] Move route collection from `Empire.ts` into `Router`
+* [ ] Move `matchRoute()` into `RouteMatcher`
+* [ ] Move `handleRoute()` into `Router`
+* [ ] Keep `Empire.ts` responsible only for:
+
+  * Server lifecycle
+  * Middleware pipeline
+  * Configuration
+  * Delegating requests to `Router`
+
+**Target Structure**
+
+```text
+src/
+└── routing/
+    ├── Route.ts
+    ├── RouteMatch.ts
+    ├── RouteMatcher.ts
+    └── Router.ts
+```
+
 
 ---
 
