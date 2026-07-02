@@ -1,10 +1,8 @@
-import http from "http";
 import { Context } from "./http/Context";
 
 export type Middleware = (
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  next: () => Promise<void>
+    ctx: Context,
+    next: () => Promise<void>
 ) => void | Promise<void>;
 
 export type RouteHandler = (

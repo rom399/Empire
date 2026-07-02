@@ -1,17 +1,12 @@
 import { Middleware } from "../types";
 
-export const AuthMiddleware: Middleware = (
-    req,
-    res,
-    next
-) => {
+export const AuthMiddleware: Middleware = (ctx, next) => {
 
     const authorized = true;
 
     if (!authorized) {
 
-        res.statusCode = 401;
-        res.end("Unauthorized");
+        ctx.status(401).text("Unauthorized");
 
         return;
     }

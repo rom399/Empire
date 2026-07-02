@@ -143,13 +143,14 @@ export class Empire {
     req: http.IncomingMessage,
     res: http.ServerResponse,
   ): Promise<void> {
+    const ctx = new Context(req, res);
     let index = 0;
 
     const next = async (): Promise<void> => {
       const middleware = this.middlewares[index++];
 
       if (middleware) {
-        await middleware(req, res, next);
+        await middleware(ctx, next);
         return;
       }
 
@@ -167,9 +168,7 @@ export class Empire {
 
     const handler = new StaticFileHandler({ root });
 
-    const middleware: Middleware = async (req, res, next) => {
-
-      const ctx = new Context(req, res);
+    const middleware: Middleware = async (ctx, next) => {
 
       const wasHandled = await handler.handle(ctx);
 

@@ -11,7 +11,6 @@
  */
 
 import process from "process";
-import http from "http";
 import { Empire } from "../../src/Empire";
 import { LoggerMiddleware } from "../../src/middleware/LoggerMiddleware";
 import { AuthMiddleware } from "../../src/middleware/AuthMiddleware";
@@ -22,11 +21,7 @@ const app = new Empire({
     port: 8003,
 });
 
-const timingMiddleware: Middleware = async (
-    req: http.IncomingMessage,
-    res: http.ServerResponse,
-    next: () => Promise<void>
-) => {
+const timingMiddleware: Middleware = async (ctx, next) => {
     const startedAt = Date.now();
 
     await next();
