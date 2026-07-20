@@ -1,4 +1,5 @@
 import * as http from "http";
+import * as path from "path";
 import { Middleware, RouteHandler } from "./types";
 import { ILogger } from "./logging/ILogger";
 import { ConsoleLogger } from "./logging/ConsoleLogger";
@@ -64,7 +65,10 @@ export class Empire {
   /**
    * Serves static files from root. Pass options.prefix to mount the
    * folder under a URL prefix instead of the URL root — useful when
-   * serving more than one static folder from the same server.
+   * serving more than one static folder from the same server. Pass
+   * options.spaFallback to serve root/index.html for any request that
+   * matches neither a static file nor a registered route, so a
+   * client-side router can render the path itself.
    */
   public useStaticFiles(root: string, options?: UseStaticFilesOptions): void {
 
@@ -80,6 +84,14 @@ export class Empire {
     };
 
     this.use(middleware);
+
+    if (options?.spaFallback) {
+      const indexPath = path.join(root, "index.html");
+
+      this.router.setFallback(async (ctx) => {
+        await ctx.file(indexPath);
+      });
+    }
   }
 
   public get(path: string, handler: RouteHandler): void {

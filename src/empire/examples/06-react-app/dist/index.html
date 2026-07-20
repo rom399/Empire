@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Empire — React App</title>
+        <link rel="icon" href="/favicon.ico" />
+        <style>
+            body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+            nav a { margin-right: 1rem; }
+            code { background: #f4f4f4; padding: 0.15em 0.4em; border-radius: 3px; }
+        </style>
+    </head>
+    <body>
+        <div id="root"></div>
+
+        <!--
+            React, ReactDOM, and React Router loaded from a CDN (unpkg), and
+            Babel Standalone to transpile the JSX in main.jsx in the browser.
+            No npm install and no build step — this is a real React app, just
+            without a bundler, consistent with the rest of Empire's examples
+            having no dependencies of their own.
+        -->
+        <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+        <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+        <script crossorigin src="https://unpkg.com/react-router-dom@6/dist/umd/react-router-dom.production.min.js"></script>
+        <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+        <script type="text/babel" src="/assets/main.jsx"></script>
+    </body>
+</html>

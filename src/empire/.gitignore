@@ -5,6 +5,12 @@ node_modules/
 dist/
 build/
 
+# examples/06-react-app/dist is example source (a simulated React build
+# output), not a real build artifact - it needs to be committed for the
+# example to work when cloned
+!examples/06-react-app/dist/
+!examples/06-react-app/dist/**
+
 # Logs
 *.log
 npm-debug.log*

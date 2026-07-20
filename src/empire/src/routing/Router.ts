@@ -16,6 +16,7 @@ export class Router {
     private readonly routes: Route[] = [];
     private readonly matcher: RouteMatcher;
     private readonly logger: ILogger;
+    private fallback?: RouteHandler;
 
     constructor(logger: ILogger) {
         this.logger = logger;
@@ -37,10 +38,30 @@ export class Router {
     }
 
     /**
+     * Registers a handler invoked when no route matches a GET request,
+     * in place of the default plain-text 404. Used for single-page-app
+     * support, where an unmatched path (e.g. a React Router route) should
+     * still serve the application shell rather than a genuine not-found
+     * response. Runs after every registered route has had a chance to
+     * match, so API routes always take priority over the fallback.
+     *
+     * Deliberately GET-only: a POST, PUT, or DELETE to an unmatched path
+     * is almost always a real client error (a typo'd endpoint, a wrong
+     * method) and should 404 loudly rather than silently returning the
+     * HTML shell, which would mask the mistake during development.
+     *
+     * Only one fallback can be registered — a later call replaces
+     * the previous one.
+     */
+    public setFallback(handler: RouteHandler): void {
+        this.fallback = handler;
+    }
+
+    /**
      * Matches the incoming request against registered routes and
-     * invokes the first matching handler. Writes a 404 response when
-     * no route matches, and converts thrown errors into the correct
-     * status code and JSON body.
+     * invokes the first matching handler. Falls back to the registered
+     * fallback handler (GET requests only), or a 404 response, when no
+     * route matches.
      */
     public async handle(
         req: http.IncomingMessage,
@@ -62,37 +83,53 @@ export class Router {
             }
 
             const ctx = new Context(req, res, match.params);
+            await this.invokeHandler(ctx, route.handler);
 
-            try {
+            return;
+        }
 
-                await route.handler(ctx);
-
-            } catch (err) {
-
-                this.logger.error("Unhandled route error", err);
-
-                if (!res.headersSent) {
-
-                    if (err instanceof HttpError) {
-
-                        res.statusCode = err.statusCode;
-                        res.setHeader("Content-Type", "application/json");
-                        res.end(JSON.stringify({ error: err.message }));
-
-                        return;
-                    }
-
-                    res.statusCode = 500;
-                    res.setHeader("Content-Type", "application/json");
-                    res.end(JSON.stringify({ error: "Internal Server Error" }));
-                }
-            }
+        if (this.fallback && req.method === "GET") {
+            const ctx = new Context(req, res);
+            await this.invokeHandler(ctx, this.fallback);
 
             return;
         }
 
         res.statusCode = 404;
         res.end("Route not found");
+    }
+
+    /**
+     * Invokes a route or fallback handler, converting thrown errors into
+     * the correct status code and JSON body. Shared by matched routes
+     * and the fallback handler so both get identical error handling.
+     */
+    private async invokeHandler(ctx: Context, handler: RouteHandler): Promise<void> {
+
+        try {
+
+            await handler(ctx);
+
+        } catch (err) {
+
+            this.logger.error("Unhandled route error", err);
+
+            if (!ctx.res.headersSent) {
+
+                if (err instanceof HttpError) {
+
+                    ctx.res.statusCode = err.statusCode;
+                    ctx.res.setHeader("Content-Type", "application/json");
+                    ctx.res.end(JSON.stringify({ error: err.message }));
+
+                    return;
+                }
+
+                ctx.res.statusCode = 500;
+                ctx.res.setHeader("Content-Type", "application/json");
+                ctx.res.end(JSON.stringify({ error: "Internal Server Error" }));
+            }
+        }
     }
 
     private addRoute(method: string, path: string, handler: RouteHandler): void {

@@ -15,6 +15,9 @@ export class MimeTypes {
         ".pdf":  "application/pdf",
         ".woff":  "font/woff",
         ".woff2": "font/woff2",
+        ".ttf":   "font/ttf",
+        ".eot":   "application/vnd.ms-fontobject",
+        ".map":   "application/json",
     };
 
     private static readonly fallback = "application/octet-stream";

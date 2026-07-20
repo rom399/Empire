@@ -43,21 +43,61 @@ export class StaticFileHandler {
             return true;
         }
 
-        const fileExists = await this.exists(absolutePath);
+        const targetPath = await this.resolveTargetPath(absolutePath);
 
-        if (!fileExists) {
+        if (!targetPath) {
             return false;
         }
 
-        const extension = path.extname(absolutePath);
-        const mimeType  = MimeTypes.getType(extension);
-
-        const fileContents = await fs.promises.readFile(absolutePath);
-
-        ctx.res.setHeader("Content-Type", mimeType);
-        ctx.res.end(fileContents);
+        await this.sendFile(ctx, targetPath);
 
         return true;
+    }
+
+    /**
+     * Resolves the request path to an actual file on disk. Serves the
+     * path directly if it's a file; if it's a directory, falls back to
+     * an index.html inside it (e.g. /about/ serves /about/index.html).
+     * Returns null when neither exists, so handle() can fall through.
+     */
+    private async resolveTargetPath(absolutePath: string): Promise<string | null> {
+
+        const stats = await this.stat(absolutePath);
+
+        if (stats?.isFile()) {
+            return absolutePath;
+        }
+
+        if (stats?.isDirectory()) {
+            const indexPath = path.join(absolutePath, "index.html");
+            const indexStats = await this.stat(indexPath);
+
+            if (indexStats?.isFile()) {
+                return indexPath;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Streams a file to the response rather than reading it fully into
+     * memory first — necessary for large bundles and assets.
+     */
+    private async sendFile(ctx: Context, filePath: string): Promise<void> {
+
+        const stats = await fs.promises.stat(filePath);
+        const mimeType = MimeTypes.getType(path.extname(filePath));
+
+        ctx.res.setHeader("Content-Type", mimeType);
+        ctx.res.setHeader("Content-Length", stats.size);
+
+        await new Promise<void>((resolve, reject) => {
+            const stream = fs.createReadStream(filePath);
+            stream.on("error", reject);
+            ctx.res.on("finish", resolve);
+            stream.pipe(ctx.res);
+        });
     }
 
     /**
@@ -70,13 +110,12 @@ export class StaticFileHandler {
             || requestedPath.startsWith(`${this.prefix}/`);
     }
 
-    private async exists(filePath: string): Promise<boolean> {
+    private async stat(filePath: string): Promise<fs.Stats | null> {
 
         try {
-            const stat = await fs.promises.stat(filePath);
-            return stat.isFile();
+            return await fs.promises.stat(filePath);
         } catch {
-            return false;
+            return null;
         }
     }
 }
