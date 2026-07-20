@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**0.8.0 — Context API Complete**
+**0.9.0 — Router Refactor Complete**
 
 ---
 
@@ -14,13 +14,19 @@ None of these are large in scope — they are gaps or API corrections.
 | # | Item | Files |
 |---|------|-------|
 | 0b | React application support — SPA fallback and file streaming | `src/static/StaticFileHandler.ts` |
-| 3 | Static files API decision — `useStaticFiles(root)` vs `static(prefix, root)` | `src/Empire.ts`, `src/static/` |
-| 4 | Router refactor — extract routing out of `Empire.ts` | New `src/routing/` package |
 
 Resolved:
 - ~~0 — Context API freeze~~ — all v1 Context members implemented
 - ~~1 — Middleware signature migration~~ — `(ctx, next)` signature in place across types, middleware and examples
 - ~~2 — `ctx.form()` body parsing~~ — implemented
+- ~~3 — Static files API decision~~ — `useStaticFiles(root)` confirmed, ASP.NET Core style
+  (mirrors `app.UseStaticFiles()`) per CONTRIBUTING.md conventions. Express-style
+  `static(prefix, root)` rejected — no prefix mounting requirement, and keeping
+  `useStaticFiles` avoids a breaking rename. Current `Empire.ts` signature already
+  matches; no code change required.
+- ~~4 — Router refactor~~ — routing extracted into `src/routing/` (`Route`,
+  `RouteMatch`, `RouteMatcher`, `Router`). `Empire.ts` now only owns server
+  lifecycle, middleware, and delegates routing to a `Router` instance.
 
 ---
 
@@ -42,9 +48,9 @@ Resolved:
 - `AuthMiddleware` — stub, always authorized
 
 ### Phase 3 — Routing ✅ (GET and POST only)
-- Route table with registration order matching
-- `app.get()` and `app.post()`
-- Segment-based path matching
+- Route table with registration order matching, owned by `Router` (`src/routing/`)
+- `app.get()` and `app.post()` — delegate to `Router.get()`/`Router.post()`
+- `RouteMatcher` — segment-based path matching, extracted from `Empire.ts`
 - Route parameters via `:name` syntax → `ctx.params`
 - 404 response when no route matches
 
@@ -92,10 +98,11 @@ Post-v1 only (requires DI):
 - `.npmignore`
 - REST client test files
 
-### Phase 9 — Project Structure ✅ (router refactor pending)
+### Phase 9 — Project Structure ✅
 - Project renamed to `empire`
 - `src/http/`, `src/errors/`, `src/middleware/`, `src/static/`, `src/logging/`
-- `src/di/` and `src/routing/` placeholder directories
+- `src/routing/` — `Route`, `RouteMatch`, `RouteMatcher`, `Router`
+- `src/di/` placeholder directory, ready for Phase 10
 - `tests/unit/`, `tests/http/`, `tests/fixtures/`
 - `doc/` directory with architecture and state documents
 
@@ -115,16 +122,7 @@ the gaps below apply to `StaticFileHandler` middleware only.
 | React Router fallback — serve root `index.html` for unmatched paths | `src/static/StaticFileHandler.ts` |
 | Verify MIME types cover React build output (`.map`, `.ttf`, `.eot`) | `src/static/MimeTypes.ts` |
 
-### v1.0.0 — Router refactor
-
-`Empire.ts` currently owns route matching and dispatch. This must be extracted
-into `src/routing/` before v1.
-
-Files to create:
-- `src/routing/Route.ts`
-- `src/routing/RouteMatch.ts`
-- `src/routing/RouteMatcher.ts`
-- `src/routing/Router.ts`
+This is now the only remaining v1.0.0 blocker.
 
 ---
 

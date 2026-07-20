@@ -1,15 +1,10 @@
 import * as http from "http";
-import { Middleware, Route, RouteHandler } from "./types";
+import { Middleware, RouteHandler } from "./types";
 import { ILogger } from "./logging/ILogger";
 import { ConsoleLogger } from "./logging/ConsoleLogger";
 import { Context } from "./http/Context";
-import { HttpError } from "./errors/HttpError";
 import { StaticFileHandler } from "./static/StaticFileHandler";
-
-type RouteMatch = {
-    matched: boolean;
-    params: Record<string, string>;
-};
+import { Router } from "./routing/Router";
 
 export interface EmpireOptions {
   host: string;
@@ -25,118 +20,19 @@ export class Empire {
   private readonly _logger: ILogger;
 
   private readonly middlewares: Middleware[] = [];
-  private readonly routes: Route[] = [];
+  private readonly router: Router;
 
   constructor(options: EmpireOptions) {
     this.host = options.host;
     this.port = options.port;
     this._logger = options.logger ?? new ConsoleLogger();
+    this.router = new Router(this._logger);
 
     this.server = http.createServer(
       async (req: http.IncomingMessage, res: http.ServerResponse) => {
         await this.handleRequest(req, res);
       },
     );
-  }
-
-  private matchRoute(
-    routePath: string,
-    requestPath: string
-  ): RouteMatch {
-
-    const routeSegments =
-      routePath.split("/").filter(Boolean);
-
-    const requestSegments =
-      requestPath.split("/").filter(Boolean);
-
-    if (routeSegments.length !== requestSegments.length) {
-      return {
-        matched: false,
-        params: {}
-      };
-    }
-
-    const params: Record<string, string> = {};
-
-    for (let i = 0; i < routeSegments.length; i++) {
-
-      const routeSegment = routeSegments[i];
-      const requestSegment = requestSegments[i];
-
-      if (routeSegment.startsWith(":")) {
-
-        const paramName = routeSegment.slice(1);
-        params[paramName] = requestSegment;
-
-        continue;
-      }
-
-      if (routeSegment !== requestSegment) {
-        return {
-          matched: false,
-          params: {}
-        };
-      }
-    }
-
-    return {
-      matched: true,
-      params
-    };
-  }
-
-  private async handleRoute(
-    req: http.IncomingMessage,
-    res: http.ServerResponse
-  ): Promise<void> {
-
-    const path = req.url?.split("?")[0] ?? "/";
-
-    for (const route of this.routes) {
-
-      if (route.method !== req.method) {
-        continue;
-      }
-
-      const match = this.matchRoute(route.path, path);
-
-      if (!match.matched) {
-        continue;
-      }
-
-      const ctx = new Context(req, res, match.params);
-
-      try {
-
-        await route.handler(ctx);
-
-      } catch (err) {
-
-        this.logger.error("Unhandled route error", err);
-
-        if (!res.headersSent) {
-
-          if (err instanceof HttpError) {
-
-            res.statusCode = err.statusCode;
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ error: err.message }));
-
-            return;
-          }
-
-          res.statusCode = 500;
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ error: "Internal Server Error" }));
-        }
-      }
-
-      return;
-    }
-
-    res.statusCode = 404;
-    res.end("Route not found");
   }
 
   private async handleRequest(
@@ -154,7 +50,7 @@ export class Empire {
         return;
       }
 
-      await this.handleRoute(req, res);
+      await this.router.handle(req, res);
     };
 
     await next();
@@ -181,19 +77,11 @@ export class Empire {
   }
 
   public get(path: string, handler: RouteHandler): void {
-    this.routes.push({
-      method: "GET",
-      path,
-      handler,
-    });
+    this.router.get(path, handler);
   }
 
   public post(path: string, handler: RouteHandler): void {
-    this.routes.push({
-      method: "POST",
-      path,
-      handler,
-    });
+    this.router.post(path, handler);
   }
 
   public get logger(): ILogger {

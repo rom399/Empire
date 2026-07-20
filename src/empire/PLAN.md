@@ -20,15 +20,20 @@ Empire should eventually support:
 
 ## Current Version
 
-0.7.0 — Static Files Complete
+0.9.0 — Router Refactor Complete
 
 **v1.0.0 blockers:**
-* Context API freeze — all v1 Context members implemented
 * React application support — index.html fallback and React Router fallback
+* Static file streaming (StaticFileHandler middleware — ctx.file()/ctx.download() already stream)
+
+This is the only remaining v1.0.0 blocker.
+
+**Resolved:**
+* Context API freeze — all v1 Context members implemented
 * Middleware signature migration to Context-based
 * ctx.form() body parsing
-* Static file streaming
-* Router refactor out of Empire.ts
+* Static files API — kept useStaticFiles(root), see item 3 below
+* Router refactor — routing extracted out of Empire.ts into src/routing/, see Phase 9 below
 
 ---
 
@@ -147,26 +152,31 @@ const data = await ctx.form();
 Files affected:
 * `src/http/Context.ts` — add form() method
 
-### 3. Static files API — inconsistency with roadmap
+### 3. Static files API — resolved, keeping useStaticFiles(root)
 
-The roadmap specifies a URL prefix parameter:
+The original roadmap specified a URL prefix parameter, Express-style:
 
 ```ts
 app.static("/public", "./wwwroot");
 ```
 
-We implemented:
+We implemented, and are keeping, ASP.NET Core style:
 
 ```ts
 app.useStaticFiles("./wwwroot");
 ```
 
-Decision needed: align the API to the roadmap or keep the current design.
-If aligning, files affected:
-* `src/Empire.ts` — update useStaticFiles() or rename to static()
-* `src/static/StaticFileOptions.ts` — add urlPrefix property
-* `src/static/StaticFileHandler.ts` — filter requests by URL prefix
-* All examples using static files
+**Decision: keep `useStaticFiles(root)`, do not add a URL prefix.**
+Per CONTRIBUTING.md, Empire deliberately mirrors ASP.NET Core conventions
+(`app.UseStaticFiles()`) rather than Express idioms. There is no current
+requirement to mount static assets under a URL prefix, and renaming or
+adding a prefix parameter now would be a breaking change to an already
+public method right before the v1 freeze. `Empire.ts` already implements
+this signature — no code change required to close this item.
+
+If prefix-mounting is needed later, add it post-v1 as an optional second
+parameter (`useStaticFiles(root, options?)`) rather than reordering
+arguments, to stay additive-only per the Context API freeze precedent.
 
 ### 4. Static file streaming — not implemented
 
@@ -229,10 +239,10 @@ Files affected:
 
 ### Completed
 
-* Route table
-* GET routes via app.get()
-* POST routes via app.post()
-* Route matching with segment comparison
+* Route table, owned by `Router` in `src/routing/` (extracted from Empire.ts)
+* GET routes via app.get() — delegates to Router.get()
+* POST routes via app.post() — delegates to Router.post()
+* Route matching with segment comparison, in `RouteMatcher`
 * URL parameter extraction — /users/:id → ctx.params.id
 * 404 handling — Route not found response
 
@@ -341,8 +351,8 @@ Files affected:
 * Stream files instead of reading fully into memory — see Priority section
 * Verify MIME types cover all React build output — .js, .css, .map, .woff, .woff2, .woff, .ttf, .eot
 
-**Required before v1 — API alignment**
-* URL prefix support — app.static("/public", "./wwwroot") — see Priority section
+**Resolved — API alignment**
+* Static files API decision — kept `useStaticFiles(root)`, no URL prefix — see Priority section item 3
 
 **Post v1**
 * Cache headers (ETag, Last-Modified, Cache-Control)
@@ -385,6 +395,7 @@ Files affected:
 * src/errors/ — HttpError, BadRequestError
 * src/middleware/ — PascalCase filenames (AuthMiddleware, LoggerMiddleware)
 * src/static/ — MimeTypes, StaticFileHandler, StaticFileOptions
+* src/routing/ — Route, RouteMatch, RouteMatcher, Router
 * src/di/ — placeholder directory for Phase 10
 * src/logging/ — ILogger, ConsoleLogger
 * tests/unit/ — directory structure ready for Vitest (logging, middleware, static, di)
@@ -392,30 +403,33 @@ Files affected:
 * tests/fixtures/static/ — static file test assets
 * examples/ — five numbered example applications
 
-### Remaining
+### Routing Refactor — complete ✅
 
-#### Routing Refactor
-
-Move routing responsibilities out of `Empire.ts` into a dedicated routing package.
+Routing responsibilities moved out of `Empire.ts` into a dedicated routing package.
 
 **Goals**
 
-* [ ] Create `src/routing/Route.ts` — represents a single registered route
-* [ ] Create `src/routing/RouteMatch.ts` — represents the result of route matching
-* [ ] Create `src/routing/RouteMatcher.ts` — matches request paths and extracts parameters
-* [ ] Create `src/routing/Router.ts` — owns route registration and request dispatching
+* [x] Create `src/routing/Route.ts` — represents a single registered route
+* [x] Create `src/routing/RouteMatch.ts` — represents the result of route matching
+* [x] Create `src/routing/RouteMatcher.ts` — matches request paths and extracts parameters
+* [x] Create `src/routing/Router.ts` — owns route registration and request dispatching
 
 **Refactor Tasks**
 
-* [ ] Move route collection from `Empire.ts` into `Router`
-* [ ] Move `matchRoute()` into `RouteMatcher`
-* [ ] Move `handleRoute()` into `Router`
-* [ ] Keep `Empire.ts` responsible only for:
+* [x] Move route collection from `Empire.ts` into `Router`
+* [x] Move `matchRoute()` into `RouteMatcher`
+* [x] Move `handleRoute()` into `Router` (as `Router.handle()`)
+* [x] Keep `Empire.ts` responsible only for:
 
   * Server lifecycle
   * Middleware pipeline
   * Configuration
   * Delegating requests to `Router`
+
+`Router` is constructor-injected with `ILogger` rather than reaching back into
+`Empire`, per the constructor-injection convention in CONTRIBUTING.md. Verified
+with `tsc --noEmit` and a runtime smoke test against `examples/02-routing`
+(GET collection, GET with route param, unmatched 404, POST create).
 
 **Target Structure**
 
@@ -428,6 +442,78 @@ src/
     └── Router.ts
 ```
 
+---
+
+## Phase 9.1 — Routing Test & Example Coverage
+
+The router refactor (Phase 9) moved routing into `src/routing/` but shipped
+with no automated tests and only one example (`examples/02-routing`) covering
+the happy path. This phase closes that gap before Phase 10 begins, since DI
+will sit on top of `Router` and needs a tested foundation underneath it.
+
+### Prerequisites
+
+* [ ] Add `vitest` as a dev dependency
+* [ ] Add `"test": "vitest run"` script to `package.json` (replace the
+  placeholder `echo "Error: no test specified"` script)
+* [ ] Add `vitest.config.ts` if the default config doesn't resolve
+  `NodeNext` module resolution correctly against `tsconfig.json`
+* [ ] Create `tests/fixtures/services/TestLogger.ts` — an `ILogger`
+  implementation that records calls instead of writing to the console,
+  needed because `Router`'s constructor requires an `ILogger`
+
+### Unit Tests — `tests/unit/routing/`
+
+One file per class, named exactly after the class, per CONTRIBUTING.md.
+
+**`RouteMatcher.test.ts`**
+* [ ] `it('matches an exact static path')`
+* [ ] `it('does not match when segment counts differ')`
+* [ ] `it('extracts a single :param from the path')`
+* [ ] `it('extracts multiple :param segments from the path')`
+* [ ] `it('matches a static segment that follows a :param')`
+* [ ] `it('does not match when a static segment differs')`
+* [ ] `it('matches the root path')`
+
+**`Router.test.ts`**
+* [ ] `it('dispatches a GET request to a registered handler')`
+* [ ] `it('dispatches a POST request to a registered handler')`
+* [ ] `it('passes route parameters to the handler via ctx.params')`
+* [ ] `it('matches the first registered route when patterns overlap')`
+* [ ] `it('returns 404 with "Route not found" when no route matches')`
+* [ ] `it('returns 404 when the path matches but the method does not')`
+* [ ] `it('returns the HttpError status code and JSON body when a handler throws HttpError')`
+* [ ] `it('returns 500 with a generic message when a handler throws a plain Error')`
+* [ ] `it('does not write a second response when headers were already sent')`
+
+**`Route.test.ts`, `RouteMatch.test.ts`**
+* [ ] Evaluate whether these are worth writing — both are plain interfaces
+  with no behavior, so TypeScript already enforces their shape. Skip unless
+  a concrete regression scenario justifies a smoke test.
+
+### Examples — `examples/`
+
+* [ ] Extend `examples/02-routing/server.ts` (or add a new numbered example)
+  with a route using multiple `:param` segments in one path, e.g.
+  `/users/:userId/posts/:postId`
+* [ ] Add two overlapping routes (e.g. `/users/new` registered before
+  `/users/:id`) to demonstrate registration-order-wins matching
+* [ ] Add a documented request to an unmatched path so the plain-text 404
+  response is visible, not just success paths
+* [ ] Update the example's header comment to describe the new routes covered
+
+### Test Fixtures — `tests/http/`
+
+* [ ] Add corresponding `.http` requests for the new example routes
+  (multi-param route, overlapping routes, unmatched path) to
+  `tests/http/empire.http` or a new `tests/http/routing.http`
+
+### Verification
+
+* [ ] `npx vitest run` — all new tests pass
+* [ ] `npx tsc --noEmit` — no type errors
+* [ ] Manually exercise the new example routes with the updated `.http` file
+* [ ] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.1 complete
 
 ---
 
