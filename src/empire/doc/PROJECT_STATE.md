@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**0.7.0 — Static Files Complete**
+**0.8.0 — Context API Complete**
 
 ---
 
@@ -13,12 +13,14 @@ None of these are large in scope — they are gaps or API corrections.
 
 | # | Item | Files |
 |---|------|-------|
-| 0 | Context API freeze — implement all v1 Context members | `src/http/Context.ts` |
 | 0b | React application support — SPA fallback and file streaming | `src/static/StaticFileHandler.ts` |
-| 1 | Middleware signature migration to `(ctx, next)` | `src/types.ts`, `src/Empire.ts`, middleware files, examples |
-| 2 | `ctx.form()` body parsing not implemented | `src/http/Context.ts` |
 | 3 | Static files API decision — `useStaticFiles(root)` vs `static(prefix, root)` | `src/Empire.ts`, `src/static/` |
 | 4 | Router refactor — extract routing out of `Empire.ts` | New `src/routing/` package |
+
+Resolved:
+- ~~0 — Context API freeze~~ — all v1 Context members implemented
+- ~~1 — Middleware signature migration~~ — `(ctx, next)` signature in place across types, middleware and examples
+- ~~2 — `ctx.form()` body parsing~~ — implemented
 
 ---
 
@@ -31,7 +33,8 @@ None of these are large in scope — they are gaps or API corrections.
 - `ILogger` interface and `ConsoleLogger` implementation
 - Logger injection via `EmpireOptions`
 
-### Phase 2 — Middleware ✅ (signature migration pending)
+### Phase 2 — Middleware ✅
+- `(ctx, next)` Context-based signature
 - `Middleware` type definition
 - `app.use()` registration
 - Async middleware pipeline with `await next()`
@@ -45,19 +48,29 @@ None of these are large in scope — they are gaps or API corrections.
 - Route parameters via `:name` syntax → `ctx.params`
 - 404 response when no route matches
 
-### Phase 4 — Context ✅ (partial — v1 members pending)
+### Phase 4 — Context ✅ (API frozen for v1)
 - `Context` class wrapping `IncomingMessage` and `ServerResponse`
 - `ctx.req`, `ctx.res`, `ctx.method`, `ctx.path`
 - `ctx.query` — `URLSearchParams`
 - `ctx.params` — route parameters
 - `ctx.headers` — incoming request headers
 - `ctx.ipAddress` — resolves client IP, handles proxies and IPv6
+- `ctx.userAgent`, `ctx.contentType` — request header shorthands
+- `ctx.accepts(type)` — Accept header check with wildcard support
 - `ctx.status()`, `ctx.header()`, `ctx.addHeaders()` — chainable
 - `ctx.text()`, `ctx.html()`, `ctx.json()` — response helpers
+- `ctx.redirect(url, status?)` — redirect response, defaults to 302
+- `ctx.file(path)` — serve a file from a route handler (streamed)
+- `ctx.download(path, filename?)` — force download via Content-Disposition
+- `ctx.cookie(name, value, options?)`, `ctx.clearCookie(name)` — cookies via `CookieOptions`
 
-### Phase 5 — Request Bodies ✅ (form() pending)
+Post-v1 only (requires DI):
+- `ctx.services` — `ServiceProvider` per request
+
+### Phase 5 — Request Bodies ✅
 - `ctx.body()` — full body as string
 - `ctx.jsonBody()` — JSON parse with automatic `BadRequestError` on failure
+- `ctx.form()` — `application/x-www-form-urlencoded` parse with Content-Type check
 
 ### Phase 6 — Error Handling ✅
 - `HttpError(statusCode, message)` — base class
@@ -90,26 +103,10 @@ None of these are large in scope — they are gaps or API corrections.
 
 ## What Is Incomplete
 
-### v1.0.0 — Context API members not yet implemented
-
-These must be added to `src/http/Context.ts` before v1:
-
-| Member | Description |
-|--------|-------------|
-| `ctx.redirect(url, status?)` | Redirect response |
-| `ctx.file(path)` | Serve a file from a route handler |
-| `ctx.download(path, filename?)` | Force download via Content-Disposition |
-| `ctx.userAgent` | User-Agent header shorthand |
-| `ctx.contentType` | Content-Type of incoming request |
-| `ctx.accepts(type)` | Check accepted response types |
-| `ctx.cookie(name, value, options?)` | Set a response cookie |
-| `ctx.clearCookie(name)` | Clear a cookie |
-| `ctx.form()` | Parse `application/x-www-form-urlencoded` body |
-
-Post-v1 only (requires DI):
-- `ctx.services` — `ServiceProvider` per request
-
 ### v1.0.0 — Static file gaps
+
+Note: `ctx.file()` and `ctx.download()` already stream via `fs.createReadStream()`;
+the gaps below apply to `StaticFileHandler` middleware only.
 
 | Item | File |
 |------|------|
@@ -117,26 +114,6 @@ Post-v1 only (requires DI):
 | Index.html fallback for directory requests | `src/static/StaticFileHandler.ts` |
 | React Router fallback — serve root `index.html` for unmatched paths | `src/static/StaticFileHandler.ts` |
 | Verify MIME types cover React build output (`.map`, `.ttf`, `.eot`) | `src/static/MimeTypes.ts` |
-
-### v1.0.0 — Middleware migration
-
-Current signature:
-```ts
-(req: IncomingMessage, res: ServerResponse, next: () => Promise<void>) => void
-```
-
-Target signature:
-```ts
-(ctx: Context, next: () => Promise<void>) => void | Promise<void>
-```
-
-Files requiring changes:
-- `src/types.ts`
-- `src/Empire.ts` — `handleRequest()`
-- `src/middleware/LoggerMiddleware.ts`
-- `src/middleware/AuthMiddleware.ts`
-- `examples/03-middleware/server.ts`
-- All examples using `app.use()`
 
 ### v1.0.0 — Router refactor
 
