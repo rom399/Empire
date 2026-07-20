@@ -17,11 +17,16 @@ interface MockRequestOptions {
     method?: string;
     url?: string;
     headers?: Record<string, string>;
+    /** Request body, made available via `for await (const chunk of req)`, as Context.body() reads it. */
+    body?: string;
+    /** Stand-in for the underlying socket. Context.ipAddress reads socket.remoteAddress. */
+    socket?: { remoteAddress?: string };
 }
 
 /**
  * Builds a minimal http.IncomingMessage stand-in carrying just the fields
- * Router and Context read: method, url, and headers.
+ * Router and Context read: method, url, headers, an async-iterable body,
+ * and a socket with remoteAddress.
  */
 export function createMockRequest(options: MockRequestOptions = {}): http.IncomingMessage {
 
@@ -31,6 +36,16 @@ export function createMockRequest(options: MockRequestOptions = {}): http.Incomi
     (req as unknown as { url: string }).url = options.url ?? "/";
     (req as unknown as { headers: Record<string, string> }).headers =
         options.headers ?? { host: "localhost" };
+    (req as unknown as { socket: { remoteAddress?: string } }).socket =
+        options.socket ?? { remoteAddress: "127.0.0.1" };
+
+    const bodyText = options.body ?? "";
+    (req as unknown as { [Symbol.asyncIterator](): AsyncIterableIterator<Buffer> })[Symbol.asyncIterator] =
+        async function* () {
+            if (bodyText.length > 0) {
+                yield Buffer.from(bodyText, "utf-8");
+            }
+        };
 
     return req;
 }
@@ -62,9 +77,20 @@ export function createMockResponse(): MockResponse {
             return headers;
         },
 
+        write(chunk: unknown) {
+            if (typeof chunk === "string") {
+                plain.body += chunk;
+            } else if (Buffer.isBuffer(chunk)) {
+                plain.body += chunk.toString("utf-8");
+            }
+            return true;
+        },
+
         end(data?: unknown) {
             if (typeof data === "string") {
                 plain.body += data;
+            } else if (Buffer.isBuffer(data)) {
+                plain.body += data.toString("utf-8");
             }
             plain.headersSent = true;
             plain.emit("finish");

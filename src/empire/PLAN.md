@@ -740,59 +740,64 @@ for request/response stand-ins, plus real temp files on disk for `file()`/
 method, matching the file's own structure.
 
 **Request properties/methods**
-* [ ] `it('headers returns the raw request headers')`
-* [ ] `it('method defaults to GET when req.method is undefined')`
-* [ ] `it('path returns the pathname without the query string')`
-* [ ] `it('query returns parsed query parameters')`
-* [ ] `it('ipAddress prefers x-forwarded-for over the socket address')`
-* [ ] `it('ipAddress takes the first address when x-forwarded-for is a comma separated list')`
-* [ ] `it('ipAddress strips the ::ffff: IPv4-mapped prefix')`
-* [ ] `it('ipAddress normalises ::1 to 127.0.0.1')`
-* [ ] `it('userAgent returns the User-Agent header')`
-* [ ] `it('userAgent returns an empty string when the header is absent')`
-* [ ] `it('contentType strips parameters like charset')`
-* [ ] `it('accepts returns true for an exact type match')`
-* [ ] `it('accepts returns true for */*')`
-* [ ] `it('accepts returns true for a partial wildcard like text/*')`
-* [ ] `it('accepts returns false when nothing matches')`
-* [ ] `it('accepts ignores quality parameters like ;q=0.9')`
+* [x] `it('headers returns the raw request headers')`
+* [x] `it('method defaults to GET when req.method is undefined')`
+* [x] `it('path returns the pathname without the query string')`
+* [x] `it('query returns parsed query parameters')`
+* [x] `it('ipAddress prefers x-forwarded-for over the socket address')`
+* [x] `it('ipAddress takes the first address when x-forwarded-for is a comma separated list')`
+* [x] `it('ipAddress strips the ::ffff: IPv4-mapped prefix')`
+* [x] `it('ipAddress normalises ::1 to 127.0.0.1')`
+* [x] `it('userAgent returns the User-Agent header')`
+* [x] `it('userAgent returns an empty string when the header is absent')`
+* [x] `it('contentType strips parameters like charset')`
+* [x] `it('accepts returns true for an exact type match')`
+* [x] `it('accepts returns true for */*')`
+* [x] `it('accepts returns true for a partial wildcard like text/*')`
+* [x] `it('accepts returns false when nothing matches')`
+* [x] `it('accepts ignores quality parameters like ;q=0.9')`
 
 **Body parsing**
-* [ ] `it('body reads the full request stream as a string')`
-* [ ] `it('jsonBody parses a valid JSON body')`
-* [ ] `it('jsonBody throws BadRequestError on invalid JSON')`
-* [ ] `it('form parses an application/x-www-form-urlencoded body into URLSearchParams')`
-* [ ] `it('form throws BadRequestError when the Content-Type does not match')`
+* [x] `it('body reads the full request stream as a string')`
+* [x] `it('jsonBody parses a valid JSON body')`
+* [x] `it('jsonBody throws BadRequestError on invalid JSON')`
+* [x] `it('form parses an application/x-www-form-urlencoded body into URLSearchParams')`
+* [x] `it('form throws BadRequestError when the Content-Type does not match')`
 
 **Response helpers**
-* [ ] `it('status sets the response status code and is chainable')`
-* [ ] `it('header sets a single response header and is chainable')`
-* [ ] `it('addHeaders sets multiple response headers and is chainable')`
-* [ ] `it('addHeaders skips undefined and null header values')`
-* [ ] `it('text sets Content-Type to text/plain and writes the body')`
-* [ ] `it('html sets Content-Type to text/html and writes the body')`
-* [ ] `it('json sets Content-Type to application/json and writes the serialized body')`
-* [ ] `it('redirect defaults to status 302 and sets the Location header')`
-* [ ] `it('redirect uses a custom status code when passed')`
+* [x] `it('status sets the response status code and is chainable')`
+* [x] `it('header sets a single response header and is chainable')`
+* [x] `it('addHeaders sets multiple response headers and is chainable')`
+* [x] `it('addHeaders skips undefined and null header values')`
+* [x] `it('text sets Content-Type to text/plain and writes the body')`
+* [x] `it('html sets Content-Type to text/html and writes the body')`
+* [x] `it('json sets Content-Type to application/json and writes the serialized body')`
+* [x] `it('redirect defaults to status 302 and sets the Location header')`
+* [x] `it('redirect uses a custom status code when passed')`
 
 **File serving (needs real temp files — fs.createReadStream can't be
 faked with the existing MockHttp response alone; write a temp file, point
 file()/download() at it, assert on the piped output)**
-* [ ] `it('file streams the file contents to the response')`
-* [ ] `it('file sets the correct Content-Type from the file extension')`
-* [ ] `it('file sets Content-Length to the file size')`
-* [ ] `it('file throws HttpError 404 when the file does not exist')`
-* [ ] `it('download sets Content-Disposition with the file\'s own name by default')`
-* [ ] `it('download uses a custom filename when passed')`
+* [x] `it('file streams the file contents to the response')`
+* [x] `it('file sets the correct Content-Type from the file extension')`
+* [x] `it('file sets Content-Length to the file size')`
+* [x] `it('file throws HttpError 404 when the file does not exist')`
+* [x] `it('download sets Content-Disposition with the file\'s own name by default')`
+* [x] `it('download uses a custom filename when passed')`
 
 **Cookies**
-* [ ] `it('cookie sets a Set-Cookie header with the encoded value')`
-* [ ] `it('cookie defaults Path to /')`
-* [ ] `it('cookie includes Max-Age when provided')`
-* [ ] `it('cookie includes Expires when provided')`
-* [ ] `it('cookie includes Secure, HttpOnly, and SameSite flags when set')`
-* [ ] `it('cookie appends to existing Set-Cookie headers rather than overwriting')`
-* [ ] `it('clearCookie sets an already-expired Set-Cookie header for the given name')`
+* [x] `it('cookie sets a Set-Cookie header with the encoded value')`
+* [x] `it('cookie defaults Path to /')`
+* [x] `it('cookie includes Max-Age when provided')`
+* [x] `it('cookie includes Expires when provided')`
+* [x] `it('cookie includes Secure, HttpOnly, and SameSite flags when set')`
+* [x] `it('cookie appends to existing Set-Cookie headers rather than overwriting')`
+* [x] `it('clearCookie sets an already-expired Set-Cookie header for the given name')`
+
+`tests/fixtures/http/MockHttp.ts` was extended to support this file: `createMockRequest`
+now accepts `body` (exposed via `for await...of`, matching how `Context.body()` reads the
+request) and `socket.remoteAddress`; `createMockResponse` gained a `write()` method so
+`fs.createReadStream(...).pipe(res)` works against the mock in the file-serving tests.
 
 ### `tests/unit/static/StaticFileHandler.test.ts`
 
