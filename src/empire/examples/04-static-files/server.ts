@@ -2,7 +2,12 @@
  * 04 - Static Files
  *
  * Demonstrates static file serving with:
- * - app.useStaticFiles() pointing to the wwwroot directory
+ * - app.useStaticFiles(root) pointing to the wwwroot directory, mounted
+ *   at the URL root — no prefix, so wwwroot/about.html serves at /about.html
+ * - app.useStaticFiles(root, { prefix }) mounting a second folder under
+ *   a URL prefix — uploads/report.txt serves at /uploads/report.txt,
+ *   letting two static folders coexist on the same server without
+ *   colliding
  * - HTML pages that link to each other
  * - A CSS file demonstrating MIME type detection
  * - Files not found falling through to a 404 route
@@ -19,7 +24,11 @@ const app = new Empire({
     port: 8004,
 });
 
+// No prefix — every request path is checked against wwwroot/ directly
 app.useStaticFiles("./examples/04-static-files/wwwroot");
+
+// Prefixed — only requests under /uploads are checked against this folder
+app.useStaticFiles("./examples/04-static-files/uploads", { prefix: "/uploads" });
 
 app.get("/health", (ctx) => {
     ctx.json({ status: "healthy" });

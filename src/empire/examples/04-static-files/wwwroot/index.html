@@ -9,10 +9,12 @@
         <nav>
             <a href="/">Home</a>
             <a href="/about.html">About</a>
+            <a href="/uploads/report.txt">Report (prefixed folder)</a>
         </nav>
         <main>
             <h1>Welcome to Empire</h1>
-            <p>This page is served as a static file from <code>wwwroot/</code>.</p>
+            <p>This page is served as a static file from <code>wwwroot/</code>, mounted at the URL root.</p>
+            <p>The <a href="/uploads/report.txt">Report</a> link above is served from a second folder mounted under the <code>/uploads</code> prefix — a separate call to <code>app.useStaticFiles()</code> with <code>{ prefix: "/uploads" }</code>.</p>
         </main>
     </body>
 </html>

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-**0.9.0 — Router Refactor Complete**
+**0.9.1 — Static File Prefix Mounting**
 
 ---
 
@@ -24,6 +24,12 @@ Resolved:
   `static(prefix, root)` rejected — no prefix mounting requirement, and keeping
   `useStaticFiles` avoids a breaking rename. Current `Empire.ts` signature already
   matches; no code change required.
+  - Follow-up: `useStaticFiles(root, options?)` now accepts an optional
+    `{ prefix }` (`UseStaticFilesOptions`), letting multiple static folders
+    be mounted at different URL prefixes on the same server — additive,
+    existing single-argument calls are unaffected. `StaticFileHandler`
+    checks and strips the prefix before resolving files; `StaticFileOptions`
+    gained a matching optional `prefix` field.
 - ~~4 — Router refactor~~ — routing extracted into `src/routing/` (`Route`,
   `RouteMatch`, `RouteMatcher`, `Router`). `Empire.ts` now only owns server
   lifecycle, middleware, and delegates routing to a `Router` instance.
@@ -86,9 +92,12 @@ Post-v1 only (requires DI):
 - Server survives exceptions and continues running
 
 ### Phase 7 — Static Files ✅ (streaming and fallback pending)
-- `app.useStaticFiles(root)` — registers static file middleware
+- `app.useStaticFiles(root, options?)` — registers static file middleware,
+  optional `{ prefix }` mounts the folder under a URL prefix
+- Multiple `useStaticFiles()` calls with different prefixes can be mounted
+  on the same server — each handler falls through if its prefix doesn't match
 - `MimeTypes` — 14 extension mappings, fallback to `application/octet-stream`
-- `StaticFileHandler` — resolves and serves files
+- `StaticFileHandler` — resolves and serves files, strips prefix before resolving
 - Path traversal protection — 403 on escape attempt
 - Falls through to routing when file not found
 

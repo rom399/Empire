@@ -20,7 +20,7 @@ Empire should eventually support:
 
 ## Current Version
 
-0.9.0 — Router Refactor Complete
+0.9.1 — Static File Prefix Mounting
 
 **v1.0.0 blockers:**
 * React application support — index.html fallback and React Router fallback
@@ -34,6 +34,8 @@ This is the only remaining v1.0.0 blocker.
 * ctx.form() body parsing
 * Static files API — kept useStaticFiles(root), see item 3 below
 * Router refactor — routing extracted out of Empire.ts into src/routing/, see Phase 9 below
+* Static file prefix mounting — useStaticFiles(root, { prefix }) added as an
+  additive optional second parameter, see item 3 below
 
 ---
 
@@ -177,6 +179,39 @@ this signature — no code change required to close this item.
 If prefix-mounting is needed later, add it post-v1 as an optional second
 parameter (`useStaticFiles(root, options?)`) rather than reordering
 arguments, to stay additive-only per the Context API freeze precedent.
+
+**Update — prefix mounting implemented:**
+
+```ts
+app.useStaticFiles("./dist");
+app.useStaticFiles("./public/assets", { prefix: "/assets" });
+app.useStaticFiles("./storage/uploads", { prefix: "/uploads" });
+```
+
+Implemented exactly as the additive optional-parameter path above, chosen
+over a separate `static(prefix, root)` method for a smaller API surface —
+one method to learn, matching the ASP.NET Core `UseStaticFiles(options)`
+precedent Empire already follows, rather than two overlapping methods.
+
+Files affected:
+* `src/static/StaticFileOptions.ts` — added optional `prefix` field
+* `src/static/UseStaticFilesOptions.ts` — new, the `{ prefix }` options
+  type accepted by `Empire.useStaticFiles()`
+* `src/static/StaticFileHandler.ts` — `isUnderPrefix()` checks the request
+  path starts with the prefix (exact match or followed by `/`, so
+  `/assets` does not also match `/assets-other`) and strips it before
+  resolving against `root`; falls through (returns `false`) when the
+  prefix doesn't match, so multiple prefixed handlers can coexist in the
+  middleware chain
+* `src/Empire.ts` — `useStaticFiles(root, options?)`, backward compatible
+  with existing single-argument calls
+
+Verified with `tsc --noEmit` and a runtime test mounting three folders
+(one unprefixed, two prefixed): correct routing to each folder, prefix
+boundary case (`/assets-other` does not match `/assets`), unprefixed
+paths 404 against prefixed folders, and the existing path-traversal 403
+guard is unaffected since it runs after prefix-stripping using the same
+check as before.
 
 ### 4. Static file streaming — not implemented
 

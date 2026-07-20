@@ -4,6 +4,7 @@ import { ILogger } from "./logging/ILogger";
 import { ConsoleLogger } from "./logging/ConsoleLogger";
 import { Context } from "./http/Context";
 import { StaticFileHandler } from "./static/StaticFileHandler";
+import { UseStaticFilesOptions } from "./static/UseStaticFilesOptions";
 import { Router } from "./routing/Router";
 
 export interface EmpireOptions {
@@ -60,9 +61,14 @@ export class Empire {
     this.middlewares.push(middleware);
   }
 
-  public useStaticFiles(root: string): void {
+  /**
+   * Serves static files from root. Pass options.prefix to mount the
+   * folder under a URL prefix instead of the URL root — useful when
+   * serving more than one static folder from the same server.
+   */
+  public useStaticFiles(root: string, options?: UseStaticFilesOptions): void {
 
-    const handler = new StaticFileHandler({ root });
+    const handler = new StaticFileHandler({ root, prefix: options?.prefix });
 
     const middleware: Middleware = async (ctx, next) => {
 
