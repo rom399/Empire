@@ -32,7 +32,7 @@ export class ConsoleLogger implements ILogger {
   }
 
   public error(message: string, error?: unknown): void {
-    const formatted = this.formatMessage(error);
+    const formatted = error !== undefined ? this.formatMessage(error) : undefined;
 
     this.write("[ERROR]", formatted ? `${message}\n${formatted}` : message);
   }

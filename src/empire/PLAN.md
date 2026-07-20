@@ -45,34 +45,37 @@ These items must be resolved before Dependency Injection work begins.
 They are gaps or breaking inconsistencies discovered when comparing the
 current implementation against the full roadmap.
 
-### 0. Context API freeze — no breaking changes after v1
+### 0. Context API freeze — resolved
 
-The Context API must be finalised before v1 is released. Every version
-after v1 must remain backward compatible. Any method added post-v1 must
-be additive only — no signature changes, no removals.
+The Context API is finalised for v1. Every version after v1 must remain
+backward compatible — any method added post-v1 must be additive only, no
+signature changes, no removals.
 
-The following Context members must be implemented before v1:
+All members required before v1 are implemented in `src/http/Context.ts`,
+verified directly against the source:
 
-**Response helpers**
+**Response helpers** — all implemented
 * ctx.redirect(url, status?) — redirect to another URL
 * ctx.file(path) — serve a file from a route handler
 * ctx.download(path, filename?) — force file download via Content-Disposition
 
-**Request helpers**
+**Request helpers** — all implemented
 * ctx.ipAddress — resolved client IP, handles proxies and IPv6 normalisation
 * ctx.userAgent — User-Agent header shorthand
 * ctx.contentType — Content-Type of the incoming request
 * ctx.accepts(type) — check what response types the client accepts
 
-**Cookies**
-* ctx.cookie(name, value, options?) — set a cookie on the response
+**Cookies** — both implemented
+* ctx.cookie(name, value, options?) — set a cookie on the response, via `CookieOptions`
 * ctx.clearCookie(name) — clear a cookie by setting expired date
 
 **Post-v1 only (depends on DI)**
-* ctx.services — added after Phase 10 Dependency Injection is complete
+* ctx.services — deliberately deferred, added after Phase 10 Dependency
+  Injection is complete
 
 Files affected:
-* `src/http/Context.ts` — all additions go here
+* `src/http/Context.ts` — all additions
+* `src/http/CookieOptions.ts` — options type for `ctx.cookie()`
 
 ---
 
@@ -163,41 +166,50 @@ Verified with `tsc --noEmit` and a full runtime pass against every behaviour
 listed above, including the GET-only fallback fix (initially the fallback
 fired for any method, caught by testing `POST /api/users`).
 
-### 1. Middleware signature — breaking change required
+### 1. Middleware signature — resolved
 
-The current middleware signature is:
+The old signature was:
 
 ```ts
 (req: IncomingMessage, res: ServerResponse, next: () => Promise<void>) => void
 ```
 
-The roadmap requires a Context-based signature:
+The roadmap required a Context-based signature, and this is what's
+implemented everywhere:
 
 ```ts
 (ctx: Context, next: () => Promise<void>) => void | Promise<void>
 ```
 
-Files affected:
-* `src/types.ts` — update Middleware type
-* `src/Empire.ts` — update handleRequest() to pass ctx instead of req/res
-* `src/middleware/LoggerMiddleware.ts` — update to use ctx
-* `src/middleware/AuthMiddleware.ts` — update to use ctx
-* `examples/03-middleware/server.ts` — update timingMiddleware
-* All other examples using app.use()
+Files affected, all migrated:
+* `src/types.ts` — `Middleware` type is `(ctx, next)`
+* `src/Empire.ts` — `handleRequest()` passes `ctx` through the chain, not `req`/`res`
+* `src/middleware/LoggerMiddleware.ts` — uses `ctx`
+* `src/middleware/AuthMiddleware.ts` — uses `ctx`
+* `examples/03-middleware/server.ts` — `timingMiddleware` uses `ctx`
+* All other examples using `app.use()` — consistent `(ctx, next)` throughout
 
-### 2. form() body parsing — missing from Phase 5
+Verified directly against the current source, not just prior notes:
+`types.ts`, `LoggerMiddleware.ts`, and `examples/03-middleware/server.ts`
+all confirmed on the `(ctx, next)` signature.
 
-`ctx.form()` is listed as a completed feature in the roadmap but has not been implemented.
+### 2. form() body parsing — resolved
 
-Target API:
+`ctx.form()` was listed as a completed feature in the roadmap but had not
+actually been implemented; it now is.
+
+Actual API (returns `URLSearchParams`, matching `ctx.query`, rather than
+`Record<string, string>` as originally sketched — `URLSearchParams` handles
+repeated keys correctly, which a plain record can't):
 
 ```ts
 const data = await ctx.form();
-// data is Record<string, string> parsed from application/x-www-form-urlencoded
+// data is a URLSearchParams parsed from application/x-www-form-urlencoded
+// throws BadRequestError if the Content-Type doesn't match
 ```
 
 Files affected:
-* `src/http/Context.ts` — add form() method
+* `src/http/Context.ts` — `form()` method
 
 ### 3. Static files API — resolved, keeping useStaticFiles(root)
 
@@ -302,11 +314,8 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * Async middleware support
 * LoggerMiddleware — logs method and URL for every request
 * AuthMiddleware — stub, ready for real auth logic
-
-### Remaining
-
-* Migrate middleware to Context-based signature:
-  `(ctx, next) => void | Promise<void>`
+* Context-based signature — `(ctx, next) => void | Promise<void>` — migration
+  complete, see Priority section item 1
 
 ---
 
@@ -338,7 +347,7 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 
 ## Phase 4 — Context
 
-### Completed
+### Completed — API frozen for v1
 
 * Context class — wraps req and res
 * ctx.req / ctx.res — raw Node objects
@@ -353,19 +362,17 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * ctx.status() — chainable status code setter
 * ctx.header() — set a single response header
 * ctx.addHeaders() — set multiple response headers
-
-### Remaining
-
-**Required before v1 — API freeze**
-* ctx.redirect(url, status?) — redirect to another URL
-* ctx.file(path) — serve a file from a route handler
-* ctx.download(path, filename?) — force file download via Content-Disposition
 * ctx.ipAddress — resolved client IP, handles proxies and IPv6 normalisation
+* ctx.redirect(url, status?) — redirect to another URL, defaults to 302
+* ctx.file(path) — serve a file from a route handler, streamed via `fs.createReadStream()`
+* ctx.download(path, filename?) — force file download via Content-Disposition
 * ctx.userAgent — User-Agent header shorthand
 * ctx.contentType — Content-Type of the incoming request
-* ctx.accepts(type) — check what response types the client accepts
-* ctx.cookie(name, value, options?) — set a cookie on the response
+* ctx.accepts(type) — check what response types the client accepts, wildcard support
+* ctx.cookie(name, value, options?) — set a cookie on the response, via `CookieOptions`
 * ctx.clearCookie(name) — clear a cookie by name
+
+### Remaining
 
 **Post-v1 only (depends on Phase 10)**
 * ctx.services — ServiceProvider available per request after DI is implemented
@@ -381,10 +388,11 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 
 * ctx.body() — reads full request stream as string
 * ctx.jsonBody() — parses JSON body, throws BadRequestError on invalid JSON
+* ctx.form() — parses application/x-www-form-urlencoded body into
+  URLSearchParams, throws BadRequestError on Content-Type mismatch
 
 ### Remaining
 
-* ctx.form() — parse application/x-www-form-urlencoded body — see Priority section
 * Request size limits
 
 ---
@@ -486,10 +494,15 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * src/routing/ — Route, RouteMatch, RouteMatcher, Router
 * src/di/ — placeholder directory for Phase 10
 * src/logging/ — ILogger, ConsoleLogger
-* tests/unit/ — directory structure ready for Vitest (logging, middleware, static, di)
+* tests/unit/routing/ — RouteMatcher.test.ts, Router.test.ts (Vitest, see
+  Phase 9.1); logging/, middleware/, static/, di/ still placeholder
+  directories, no tests written yet
 * tests/http/ — REST client test files
 * tests/fixtures/static/ — static file test assets
-* examples/ — five numbered example applications
+* tests/fixtures/services/ — TestLogger.ts (in-memory ILogger for tests)
+* tests/fixtures/http/ — MockHttp.ts (request/response stand-ins for
+  testing Router without a real socket)
+* examples/ — six numbered example applications
 
 ### Routing Refactor — complete ✅
 
@@ -632,6 +645,214 @@ no concrete regression scenario has come up to justify a smoke test.
 * [ ] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.1 fully
   complete — the unit test half is done; the Examples and Test Fixtures
   sections below are still open
+
+---
+
+## Phase 9.2 — Core Class Test Coverage
+
+Phase 9.1 only covered `src/routing/`. Of Empire's 17 source files, 2 have
+tests; the rest — including `Context.ts`, the largest and most-used class
+in the framework — have none. This phase closes the highest-value gaps
+before Phase 10 (DI) adds another untested layer on top. Files with no
+behavior (plain interfaces — `Route.ts`, `RouteMatch.ts`, `CookieOptions.ts`,
+`StaticFileOptions.ts`, `UseStaticFilesOptions.ts`, `types.ts`, `ILogger.ts`)
+are intentionally out of scope, consistent with the Phase 9.1 decision to
+skip `Route.test.ts` / `RouteMatch.test.ts`.
+
+Analysis method used for each file below (reusable for future files):
+
+```
+Analyze the testing requirements for <file path>.
+
+1. Read the file in full — don't rely on prior summaries.
+2. List every public member (method, property, constructor) that has
+   observable behavior — skip pure type/interface declarations with
+   nothing to assert.
+3. For each member, identify:
+   - The happy path (typical valid input → expected output)
+   - Boundary/edge cases (empty input, missing optional params, first vs
+     nth call, ordering-dependent behavior)
+   - Error paths (what throws, what the thrown error's shape is, what
+     happens when an error occurs mid-operation)
+   - Any side effects (writes to a shared resource, mutates state,
+     depends on wall-clock time, depends on the filesystem or network)
+4. Flag anything that will need a test double or fixture to test in
+   isolation (e.g. a fake clock, a fake filesystem, a mock request/response)
+   and name the fixture if one already exists in tests/fixtures/.
+5. Output one `it('...')` case per behavior, phrased in plain English
+   per CONTRIBUTING.md's test-naming convention, grouped by method under
+   a `describe()` per method matching the file's own structure.
+```
+
+### `tests/unit/errors/HttpError.test.ts`
+
+Smallest file, lowest risk, good first target. `HttpError extends Error`
+with a `statusCode` field; no fixtures needed.
+
+* [ ] `it('sets statusCode to the value passed to the constructor')`
+* [ ] `it('sets message to the value passed to the constructor')`
+* [ ] `it('is an instance of Error')`
+
+### `tests/unit/errors/BadRequestError.test.ts`
+
+Extends `HttpError` with a hardcoded 400. No fixtures needed.
+
+* [ ] `it('sets statusCode to 400 regardless of what is passed')`
+* [ ] `it('sets message to the value passed to the constructor')`
+* [ ] `it('is an instance of HttpError')`
+
+### `tests/unit/logging/ConsoleLogger.test.ts`
+
+Writes to `console.log`/`console.error` — needs `vi.spyOn(console, "log")`
+/ `vi.spyOn(console, "error")` to capture output without polluting test
+output, and `vi.useFakeTimers()` (or a regex match ignoring the exact
+timestamp) since `write()` calls `new Date().toISOString()` on every call,
+which is otherwise untestable for an exact string match.
+
+* [x] `it('writes info messages to console.log with an [INFO] tag')`
+* [x] `it('writes warn messages to console.log with a [WARN] tag')`
+* [x] `it('writes debug messages to console.log with a [DEBUG] tag')`
+* [x] `it('writes error messages to console.error, not console.log, with an [ERROR] tag')`
+* [x] `it('includes an ISO timestamp in every log line')`
+* [x] `it('appends the error stack when error() is called with an Error object')`
+* [x] `it('appends the stringified value when error() is called with a non-Error value')`
+* [x] `it('omits the appended detail when error() is called with no second argument')` — writing
+  this test caught a real bug: `error()` called `formatMessage(undefined)` when no cause was
+  passed, and `String(undefined)` → `"undefined"` is truthy, so every plain `logger.error(msg)`
+  call was silently appending `"\nundefined"`. Fixed in `ConsoleLogger.ts` by skipping
+  `formatMessage()` entirely when `error === undefined`.
+
+### `tests/unit/static/MimeTypes.test.ts`
+
+Bonus — not in the original request, but trivial to add alongside the
+others and closes a gap flagged earlier as having no test coverage at all.
+
+* [ ] `it('returns the correct MIME type for a known extension')` (table-driven
+  across all 17 supported extensions)
+* [ ] `it('matching is case-insensitive')` (`.HTML` behaves like `.html`)
+* [ ] `it('falls back to application/octet-stream for an unknown extension')`
+
+### `tests/unit/http/Context.test.ts`
+
+The highest-value gap. Needs `MockHttp.ts` (already exists from Phase 9.1)
+for request/response stand-ins, plus real temp files on disk for `file()`/
+`download()`, since they go through `fs.createReadStream()`. Group by
+method, matching the file's own structure.
+
+**Request properties/methods**
+* [ ] `it('headers returns the raw request headers')`
+* [ ] `it('method defaults to GET when req.method is undefined')`
+* [ ] `it('path returns the pathname without the query string')`
+* [ ] `it('query returns parsed query parameters')`
+* [ ] `it('ipAddress prefers x-forwarded-for over the socket address')`
+* [ ] `it('ipAddress takes the first address when x-forwarded-for is a comma separated list')`
+* [ ] `it('ipAddress strips the ::ffff: IPv4-mapped prefix')`
+* [ ] `it('ipAddress normalises ::1 to 127.0.0.1')`
+* [ ] `it('userAgent returns the User-Agent header')`
+* [ ] `it('userAgent returns an empty string when the header is absent')`
+* [ ] `it('contentType strips parameters like charset')`
+* [ ] `it('accepts returns true for an exact type match')`
+* [ ] `it('accepts returns true for */*')`
+* [ ] `it('accepts returns true for a partial wildcard like text/*')`
+* [ ] `it('accepts returns false when nothing matches')`
+* [ ] `it('accepts ignores quality parameters like ;q=0.9')`
+
+**Body parsing**
+* [ ] `it('body reads the full request stream as a string')`
+* [ ] `it('jsonBody parses a valid JSON body')`
+* [ ] `it('jsonBody throws BadRequestError on invalid JSON')`
+* [ ] `it('form parses an application/x-www-form-urlencoded body into URLSearchParams')`
+* [ ] `it('form throws BadRequestError when the Content-Type does not match')`
+
+**Response helpers**
+* [ ] `it('status sets the response status code and is chainable')`
+* [ ] `it('header sets a single response header and is chainable')`
+* [ ] `it('addHeaders sets multiple response headers and is chainable')`
+* [ ] `it('addHeaders skips undefined and null header values')`
+* [ ] `it('text sets Content-Type to text/plain and writes the body')`
+* [ ] `it('html sets Content-Type to text/html and writes the body')`
+* [ ] `it('json sets Content-Type to application/json and writes the serialized body')`
+* [ ] `it('redirect defaults to status 302 and sets the Location header')`
+* [ ] `it('redirect uses a custom status code when passed')`
+
+**File serving (needs real temp files — fs.createReadStream can't be
+faked with the existing MockHttp response alone; write a temp file, point
+file()/download() at it, assert on the piped output)**
+* [ ] `it('file streams the file contents to the response')`
+* [ ] `it('file sets the correct Content-Type from the file extension')`
+* [ ] `it('file sets Content-Length to the file size')`
+* [ ] `it('file throws HttpError 404 when the file does not exist')`
+* [ ] `it('download sets Content-Disposition with the file\'s own name by default')`
+* [ ] `it('download uses a custom filename when passed')`
+
+**Cookies**
+* [ ] `it('cookie sets a Set-Cookie header with the encoded value')`
+* [ ] `it('cookie defaults Path to /')`
+* [ ] `it('cookie includes Max-Age when provided')`
+* [ ] `it('cookie includes Expires when provided')`
+* [ ] `it('cookie includes Secure, HttpOnly, and SameSite flags when set')`
+* [ ] `it('cookie appends to existing Set-Cookie headers rather than overwriting')`
+* [ ] `it('clearCookie sets an already-expired Set-Cookie header for the given name')`
+
+### `tests/unit/static/StaticFileHandler.test.ts`
+
+Needs real temp files/directories on disk (path resolution and traversal
+checks depend on real filesystem behavior) and `MockHttp`'s `Context`
+stand-in. `tests/fixtures/static/` already has sample files from Phase 7 —
+reuse or extend that fixture directory rather than creating a new one.
+
+**Basic resolution**
+* [ ] `it('serves a file that exists at the request path')`
+* [ ] `it('sets the correct Content-Type from the file extension')`
+* [ ] `it('sets Content-Length to the file size')`
+* [ ] `it('returns false when the file does not exist, so the middleware chain continues')`
+
+**Directory index fallback**
+* [ ] `it('serves index.html when the request path resolves to a directory containing one')`
+* [ ] `it('returns false when the request path resolves to a directory with no index.html')`
+
+**Path traversal protection**
+* [ ] `it('returns 403 when the resolved path escapes the root directory')`
+* [ ] `it('does not serve files outside root even with encoded traversal segments')`
+
+**Prefix matching**
+* [ ] `it('serves a file when the request path starts with the configured prefix')`
+* [ ] `it('returns false when the request path does not start with the prefix')`
+* [ ] `it('strips the prefix before resolving the file on disk')`
+* [ ] `it('treats a prefix followed by another segment as non-matching, e.g. /assets-other does not match /assets')`
+* [ ] `it('normalises a trailing slash on the configured prefix')`
+* [ ] `it('treats a bare "/" prefix as no prefix at all')`
+* [ ] `it('has no prefix restriction when none is configured — every path is checked')`
+
+### `tests/unit/Empire.test.ts`
+
+More of an integration point than a pure unit — needs a real `http.Server`
+bound to an ephemeral port (`port: 0`) and real HTTP requests via
+`fetch()` or Node's `http.request()`, since `Empire`'s constructor wires
+together the real Node server, not something mockable at this level
+without losing most of the value of the test.
+
+* [x] `it('starts and stops the server')` — split into "starts the server so it
+  accepts requests", "stops the server so it no longer accepts requests", and
+  "rejects start() when the port is already in use" (Phase 1 scope)
+* [x] `it('logger defaults to ConsoleLogger when none is provided')` (Phase 1 scope)
+* [x] `it('logger uses the provided logger when one is passed in EmpireOptions')` (Phase 1 scope)
+* [x] `it('logs a startup message through the injected logger on start()')` (Phase 1 scope, extra case)
+* [ ] `it('runs registered middleware in registration order')`
+* [ ] `it('does not proceed to the next middleware when one does not call next()')`
+* [ ] `it('dispatches to a registered route when the middleware chain completes')`
+* [ ] `it('get() registers a route reachable via the server')`
+* [ ] `it('post() registers a route reachable via the server')`
+* [ ] `it('useStaticFiles() serves a file from the given root')`
+* [ ] `it('useStaticFiles() falls through to routing when no file matches')`
+* [ ] `it('useStaticFiles() with spaFallback serves index.html for an unmatched GET path')`
+
+### Verification
+
+* [ ] `npx vitest run` — same caveat as Phase 9.1: dependent on `npm install`
+  succeeding wherever this runs
+* [ ] `npx tsc --noEmit` — no type errors
+* [ ] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.2 complete
 
 ---
 
