@@ -602,7 +602,11 @@ landed, post-dating this plan section):
 * [x] `it('passes route parameters to the handler via ctx.params')`
 * [x] `it('matches the first registered route when patterns overlap')`
 * [x] `it('returns 404 with "Route not found" when no route matches')`
-* [x] `it('returns 404 when the path matches but the method does not')`
+* [x] `it('returns 405 with an Allow header when the path matches but the method does not')`
+  — fixed from an earlier 404-on-method-mismatch bug found during the RFC 9110/9112
+  gap analysis (§9.2.2 requires 405 + Allow, not 404, when the resource exists under
+  a different method)
+* [x] `it('lists every registered method in Allow when a path has more than one')`
 * [x] `it('returns the HttpError status code and JSON body when a handler throws HttpError')`
 * [x] `it('returns 500 with a generic message when a handler throws a plain Error')`
 * [x] `it('does not write a second response when headers were already sent')`

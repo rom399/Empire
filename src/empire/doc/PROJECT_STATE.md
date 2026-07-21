@@ -66,7 +66,10 @@ Resolved:
 - `app.get()` and `app.post()` — delegate to `Router.get()`/`Router.post()`
 - `RouteMatcher` — segment-based path matching, extracted from `Empire.ts`
 - Route parameters via `:name` syntax → `ctx.params`
-- 404 response when no route matches
+- 404 response when no route matches any registered path
+- 405 response with an `Allow` header (listing the path's valid methods) when
+  the path matches but the method doesn't — RFC 9110 §9.2.2 compliance fix,
+  previously returned 404 for this case
 
 ### Phase 4 — Context ✅ (API frozen for v1)
 - `Context` class wrapping `IncomingMessage` and `ServerResponse`

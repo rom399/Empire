@@ -60,8 +60,11 @@ export class Router {
     /**
      * Matches the incoming request against registered routes and
      * invokes the first matching handler. Falls back to the registered
-     * fallback handler (GET requests only), or a 404 response, when no
-     * route matches.
+     * fallback handler (GET requests only), a 405 when the path matches
+     * a route registered under a different method (RFC 9110 §9.2.2 —
+     * a matched resource that doesn't support the request method must
+     * respond 405 with an Allow header, not 404), or a 404 when nothing
+     * matches the path at all.
      */
     public async handle(
         req: http.IncomingMessage,
@@ -69,12 +72,9 @@ export class Router {
     ): Promise<void> {
 
         const path = req.url?.split("?")[0] ?? "/";
+        const allowedMethods = new Set<string>();
 
         for (const route of this.routes) {
-
-            if (route.method !== req.method) {
-                continue;
-            }
 
             const match = this.matcher.match(route.path, path);
 
@@ -82,8 +82,22 @@ export class Router {
                 continue;
             }
 
+            allowedMethods.add(route.method);
+
+            if (route.method !== req.method) {
+                continue;
+            }
+
             const ctx = new Context(req, res, match.params);
             await this.invokeHandler(ctx, route.handler);
+
+            return;
+        }
+
+        if (allowedMethods.size > 0) {
+            res.statusCode = 405;
+            res.setHeader("Allow", Array.from(allowedMethods).join(", "));
+            res.end("Method not allowed");
 
             return;
         }

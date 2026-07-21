@@ -78,7 +78,7 @@ describe("Router", () => {
             expect(res.body).toBe("Route not found");
         });
 
-        it("returns 404 when the path matches but the method does not", async () => {
+        it("returns 405 with an Allow header when the path matches but the method does not", async () => {
             const router = new Router(new TestLogger());
             router.get("/users", (ctx) => ctx.json({}));
 
@@ -87,7 +87,22 @@ describe("Router", () => {
 
             await router.handle(req, res);
 
-            expect(res.statusCode).toBe(404);
+            expect(res.statusCode).toBe(405);
+            expect(res.getHeader("Allow")).toBe("GET");
+        });
+
+        it("lists every registered method in Allow when a path has more than one", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({}));
+            router.post("/users", (ctx) => ctx.json({}));
+
+            const req = createMockRequest({ method: "PUT", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(405);
+            expect(res.getHeader("Allow")).toBe("GET, POST");
         });
 
         it("returns the HttpError status code and JSON body when a handler throws HttpError", async () => {
