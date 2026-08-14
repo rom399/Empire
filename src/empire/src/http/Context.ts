@@ -14,6 +14,8 @@ export class Context {
     public readonly res: http.ServerResponse;
     public params: Record<string, string>;
 
+    private bodyPromise?: Promise<string>;
+
     public constructor(
         req: http.IncomingMessage,
         res: http.ServerResponse,
@@ -121,7 +123,15 @@ export class Context {
         );
     }
 
-    public async body(): Promise<string> {
+    public body(): Promise<string> {
+        if (!this.bodyPromise) {
+            this.bodyPromise = this.readBody();
+        }
+
+        return this.bodyPromise;
+    }
+
+    private async readBody(): Promise<string> {
 
         const decoder = new TextDecoder('utf-8');
 

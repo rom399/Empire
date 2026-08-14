@@ -43,21 +43,29 @@ export class Empire {
     res: http.ServerResponse,
   ): Promise<void> {
     const ctx = new Context(req, res);
-    let index = 0;
 
-    const next = async (): Promise<void> => {
-      const middleware = this.middlewares[index++];
+    const dispatch = async (index: number): Promise<void> => {
+      const middleware = this.middlewares[index];
 
-      if (middleware) {
-        await middleware(ctx, next);
+      if (!middleware) {
+        await this.router.handle(req, res, ctx);
         return;
       }
 
-      await this.router.handle(req, res, ctx);
+      let nextCalled = false;
+
+      await middleware(ctx, async () => {
+        if (nextCalled) {
+          throw new Error("next() called multiple times");
+        }
+        nextCalled = true;
+
+        await dispatch(index + 1);
+      });
     };
 
     try {
-      await next();
+      await dispatch(0);
     } catch (err) {
       this._logger.error("Unhandled middleware error", err);
 
