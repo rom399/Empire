@@ -12,7 +12,7 @@ export class Context {
 
     public readonly req: http.IncomingMessage;
     public readonly res: http.ServerResponse;
-    public readonly params: Record<string, string>;
+    public params: Record<string, string>;
 
     public constructor(
         req: http.IncomingMessage,

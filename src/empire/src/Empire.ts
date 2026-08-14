@@ -4,6 +4,7 @@ import { Middleware, RouteHandler } from "./types";
 import { ILogger } from "./logging/ILogger";
 import { ConsoleLogger } from "./logging/ConsoleLogger";
 import { Context } from "./http/Context";
+import { HttpError } from "./errors/HttpError";
 import { StaticFileHandler } from "./static/StaticFileHandler";
 import { UseStaticFilesOptions } from "./static/UseStaticFilesOptions";
 import { Router } from "./routing/Router";
@@ -52,10 +53,27 @@ export class Empire {
         return;
       }
 
-      await this.router.handle(req, res);
+      await this.router.handle(req, res, ctx);
     };
 
-    await next();
+    try {
+      await next();
+    } catch (err) {
+      this._logger.error("Unhandled middleware error", err);
+
+      if (!res.headersSent) {
+        if (err instanceof HttpError) {
+          res.statusCode = err.statusCode;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: err.message }));
+          return;
+        }
+
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Internal Server Error" }));
+      }
+    }
   }
 
   public use(middleware: Middleware): void {

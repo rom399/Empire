@@ -76,7 +76,8 @@ export class Router {
      */
     public async handle(
         req: http.IncomingMessage,
-        res: http.ServerResponse
+        res: http.ServerResponse,
+        ctx?: Context
     ): Promise<void> {
 
         const path = req.url?.split("?")[0] ?? "/";
@@ -107,8 +108,9 @@ export class Router {
                 this.discardBody(res);
             }
 
-            const ctx = new Context(req, res, match.params);
-            await this.invokeHandler(ctx, route.handler);
+            const requestCtx = ctx ?? new Context(req, res);
+            requestCtx.params = match.params;
+            await this.invokeHandler(requestCtx, route.handler);
 
             return;
         }
@@ -122,8 +124,8 @@ export class Router {
         }
 
         if (this.fallback && req.method === "GET") {
-            const ctx = new Context(req, res);
-            await this.invokeHandler(ctx, this.fallback);
+            const requestCtx = ctx ?? new Context(req, res);
+            await this.invokeHandler(requestCtx, this.fallback);
 
             return;
         }
