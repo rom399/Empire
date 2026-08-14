@@ -24,7 +24,12 @@ export class Router {
     }
 
     /**
-     * Registers a handler for GET requests to the given path.
+     * Registers a handler for GET requests to the given path. Also answers
+     * HEAD requests to the same path — RFC 9110 §9.3.2 requires HEAD to
+     * behave identically to GET but with no response body, so `handle()`
+     * dispatches HEAD to the matching GET handler and discards the body
+     * that handler would have written, while leaving headers (including
+     * Content-Length/Content-Type) exactly as GET would have set them.
      */
     public get(path: string, handler: RouteHandler): void {
         this.addRoute("GET", path, handler);
@@ -59,12 +64,15 @@ export class Router {
 
     /**
      * Matches the incoming request against registered routes and
-     * invokes the first matching handler. Falls back to the registered
-     * fallback handler (GET requests only), a 405 when the path matches
-     * a route registered under a different method (RFC 9110 §9.2.2 —
-     * a matched resource that doesn't support the request method must
-     * respond 405 with an Allow header, not 404), or a 404 when nothing
-     * matches the path at all.
+     * invokes the first matching handler. HEAD requests are matched
+     * against GET routes and dispatched to the same handler, with the
+     * response body discarded before it reaches the client (RFC 9110
+     * §9.3.2). Falls back to the registered fallback handler (GET
+     * requests only), a 405 when the path matches a route registered
+     * under a different method (RFC 9110 §9.2.2 — a matched resource
+     * that doesn't support the request method must respond 405 with an
+     * Allow header, not 404), or a 404 when nothing matches the path at
+     * all.
      */
     public async handle(
         req: http.IncomingMessage,
@@ -72,6 +80,8 @@ export class Router {
     ): Promise<void> {
 
         const path = req.url?.split("?")[0] ?? "/";
+        const isHead = req.method === "HEAD";
+        const matchMethod = isHead ? "GET" : req.method;
         const allowedMethods = new Set<string>();
 
         for (const route of this.routes) {
@@ -84,8 +94,17 @@ export class Router {
 
             allowedMethods.add(route.method);
 
-            if (route.method !== req.method) {
+            if (route.method === "GET") {
+                // HEAD is implicitly supported wherever GET is
+                allowedMethods.add("HEAD");
+            }
+
+            if (route.method !== matchMethod) {
                 continue;
+            }
+
+            if (isHead) {
+                this.discardBody(res);
             }
 
             const ctx = new Context(req, res, match.params);
@@ -111,6 +130,20 @@ export class Router {
 
         res.statusCode = 404;
         res.end("Route not found");
+    }
+
+    /**
+     * Makes a response silently drop any body written to it while still
+     * setting status and headers normally. Used for HEAD requests: the
+     * matched GET handler runs unmodified (so Content-Type and
+     * Content-Length reflect exactly what a GET would have sent), but the
+     * actual bytes never reach the client, per RFC 9110 §9.3.2.
+     */
+    private discardBody(res: http.ServerResponse): void {
+        const originalEnd = res.end.bind(res);
+
+        res.write = (() => true) as typeof res.write;
+        res.end = ((..._args: unknown[]) => originalEnd()) as typeof res.end;
     }
 
     /**

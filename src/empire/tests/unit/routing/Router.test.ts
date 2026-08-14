@@ -88,7 +88,7 @@ describe("Router", () => {
             await router.handle(req, res);
 
             expect(res.statusCode).toBe(405);
-            expect(res.getHeader("Allow")).toBe("GET");
+            expect(res.getHeader("Allow")).toBe("GET, HEAD");
         });
 
         it("lists every registered method in Allow when a path has more than one", async () => {
@@ -102,7 +102,7 @@ describe("Router", () => {
             await router.handle(req, res);
 
             expect(res.statusCode).toBe(405);
-            expect(res.getHeader("Allow")).toBe("GET, POST");
+            expect(res.getHeader("Allow")).toBe("GET, HEAD, POST");
         });
 
         it("returns the HttpError status code and JSON body when a handler throws HttpError", async () => {
@@ -150,6 +150,88 @@ describe("Router", () => {
 
             expect(res.body).toBe("already sent");
             expect(res.statusCode).toBe(200);
+        });
+    });
+
+    describe("HEAD", () => {
+
+        it("dispatches a HEAD request to the matching GET handler", async () => {
+            const router = new Router(new TestLogger());
+            let handlerRan = false;
+            router.get("/users", (ctx) => {
+                handlerRan = true;
+                ctx.json({ ok: true });
+            });
+
+            const req = createMockRequest({ method: "HEAD", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(handlerRan).toBe(true);
+        });
+
+        it("sets the same headers a GET request would set", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({ ok: true }));
+
+            const req = createMockRequest({ method: "HEAD", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.getHeader("Content-Type")).toBe("application/json");
+        });
+
+        it("discards the response body", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({ ok: true }));
+
+            const req = createMockRequest({ method: "HEAD", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.body).toBe("");
+        });
+
+        it("returns 405 with an Allow header when no GET route matches the path", async () => {
+            const router = new Router(new TestLogger());
+            router.post("/users", (ctx) => ctx.json({}));
+
+            const req = createMockRequest({ method: "HEAD", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(405);
+            expect(res.getHeader("Allow")).toBe("POST");
+        });
+
+        it("includes HEAD in the Allow header alongside GET on a 405 for a different path's method", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({}));
+
+            const req = createMockRequest({ method: "DELETE", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(405);
+            expect(res.getHeader("Allow")).toBe("GET, HEAD");
+        });
+
+        it("returns 404 when no route matches the path at all", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({}));
+
+            const req = createMockRequest({ method: "HEAD", url: "/nope" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(404);
         });
     });
 

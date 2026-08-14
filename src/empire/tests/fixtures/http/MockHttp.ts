@@ -39,9 +39,20 @@ export function createMockRequest(options: MockRequestOptions = {}): http.Incomi
     (req as unknown as { socket: { remoteAddress?: string } }).socket =
         options.socket ?? { remoteAddress: "127.0.0.1" };
 
+    // A real http.IncomingMessage is a stream: it can be read ONCE. The
+    // `consumed` flag models that, so tests catch double-read bugs instead of
+    // silently replaying the body on every `for await`.
     const bodyText = options.body ?? "";
+    let consumed = false;
+
     (req as unknown as { [Symbol.asyncIterator](): AsyncIterableIterator<Buffer> })[Symbol.asyncIterator] =
         async function* () {
+            if (consumed) {
+                return;
+            }
+
+            consumed = true;
+
             if (bodyText.length > 0) {
                 yield Buffer.from(bodyText, "utf-8");
             }

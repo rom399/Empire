@@ -329,6 +329,13 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * Route matching with segment comparison, in `RouteMatcher`
 * URL parameter extraction — /users/:id → ctx.params.id
 * 404 handling — Route not found response
+* 405 handling with an `Allow` header when a path matches a different
+  method (RFC 9110 §9.2.2 compliance fix, found via an RFC gap analysis;
+  previously returned 404)
+* HEAD routes — auto-dispatched to the matching GET handler with the
+  response body discarded, headers left exactly as GET would set them
+  (RFC 9110 §9.3.2). `Allow` headers list `HEAD` alongside `GET` wherever
+  a GET route exists, since HEAD is implicitly supported there too.
 
 ### Remaining
 
@@ -336,7 +343,6 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * PATCH routes
 * DELETE routes
 * OPTIONS routes
-* HEAD routes
 * Route groups
 * Route-level middleware
 * Wildcard routes
@@ -610,6 +616,15 @@ landed, post-dating this plan section):
 * [x] `it('returns the HttpError status code and JSON body when a handler throws HttpError')`
 * [x] `it('returns 500 with a generic message when a handler throws a plain Error')`
 * [x] `it('does not write a second response when headers were already sent')`
+
+HEAD support (RFC 9110 §9.3.2, added during the RFC gap analysis):
+* [x] `it('dispatches a HEAD request to the matching GET handler')`
+* [x] `it('sets the same headers a GET request would set')`
+* [x] `it('discards the response body')`
+* [x] `it('returns 405 with an Allow header when no GET route matches the path')`
+* [x] `it('includes HEAD in the Allow header alongside GET on a 405 for a different path's method')`
+* [x] `it('returns 404 when no route matches the path at all')`
+
 * [x] `it('invokes the fallback when no route matches a GET request')`
 * [x] `it('prefers a matching route over the fallback')`
 * [x] `it('does not invoke the fallback for non-GET requests')`

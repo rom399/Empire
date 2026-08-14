@@ -61,7 +61,7 @@ Resolved:
 - `LoggerMiddleware` — logs method and URL
 - `AuthMiddleware` — stub, always authorized
 
-### Phase 3 — Routing ✅ (GET and POST only)
+### Phase 3 — Routing ✅ (GET, POST, and HEAD; PUT/PATCH/DELETE/OPTIONS still open)
 - Route table with registration order matching, owned by `Router` (`src/routing/`)
 - `app.get()` and `app.post()` — delegate to `Router.get()`/`Router.post()`
 - `RouteMatcher` — segment-based path matching, extracted from `Empire.ts`
@@ -70,6 +70,11 @@ Resolved:
 - 405 response with an `Allow` header (listing the path's valid methods) when
   the path matches but the method doesn't — RFC 9110 §9.2.2 compliance fix,
   previously returned 404 for this case
+- HEAD requests are auto-dispatched to the matching GET handler with the
+  response body discarded before it reaches the client, while headers
+  (Content-Type, Content-Length, etc.) are left exactly as GET would set
+  them — RFC 9110 §9.3.2. `Allow` headers include `HEAD` alongside `GET`
+  wherever a GET route exists.
 
 ### Phase 4 — Context ✅ (API frozen for v1)
 - `Context` class wrapping `IncomingMessage` and `ServerResponse`
