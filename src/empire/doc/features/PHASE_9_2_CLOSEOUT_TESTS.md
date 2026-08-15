@@ -71,21 +71,32 @@ part of this work rather than duplicating:
 
 ---
 
-## Step 1 — `Empire.test.ts`: GET/POST real-server coverage
+## Step 1 — `Empire.test.ts`: GET/POST real-server coverage ✅
 
-- [ ] New tests alongside the existing `put()`/`patch()`/`delete()`
+- [x] New tests alongside the existing `put()`/`patch()`/`delete()`
   "registers a route reachable via the server" tests in the `routing`
-  describe block
-- [ ] `it('get() registers a route reachable via the server')`
-- [ ] `it('post() registers a route reachable via the server')` — decide
-  whether a real JSON body is needed to exercise a realistic case (mirroring
-  the PUT/PATCH tests' style) or a bodyless POST is enough to prove routing
-  alone
-- [ ] Match the existing PUT/PATCH/DELETE tests' style exactly: ephemeral
-  port, `TestLogger`, `afterEach` cleanup, `Connection: close` on the
-  `fetch()` call if `app.stop()` timing becomes an issue (per the Step 1/2
-  findings already documented in
+  describe block (added as the first two entries in that block)
+- [x] `it('get() registers a route reachable via the server')`
+- [x] `it('post() registers a route reachable via the server')` — matched
+  the existing PUT/PATCH tests' minimal style (no body reading) rather than
+  reading a JSON body — neither PUT nor PATCH read the body in their
+  versions either, and `ctx.jsonBody()` already has its own dedicated
+  coverage in `Context.test.ts`, so adding it here would test the same
+  thing twice instead of adding value
+- [x] Matched the existing PUT/PATCH/DELETE tests' style exactly: ephemeral
+  port (47015, 47016), `createApp()` helper, `afterEach` cleanup via
+  `instances`. `Connection: close` wasn't needed — these two follow the
+  exact PUT/PATCH/DELETE pattern, which never needed it either (only the
+  `useStaticFiles()` tests do, per Step 2's findings in
   `doc/features/TEST_UPDATES_EMPIRE_STATICFILEHANDLER.md`)
+- [x] Updated the file's header comment, which previously said "GET/POST
+  have no equivalent test here yet"
+
+Verified: `tsc --noEmit` clean, 16/16 tests in `Empire.test.ts` passing.
+Full suite: 187 passed, 1 skipped, 1 failed — the 1 failure is the known
+pre-existing `tests/integration/FileStreaming.test.ts` flake (see
+`doc/PROJECT_STATE.md`), confirmed by re-running that file in isolation
+(3/3 passed), not caused by this step.
 
 ## Step 2 — `StaticFileHandler.test.ts`: path traversal protection
 
