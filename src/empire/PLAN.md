@@ -875,14 +875,18 @@ stand-in. `tests/fixtures/static/` already has sample files from Phase 7 —
 reuse or extend that fixture directory rather than creating a new one.
 
 **Basic resolution**
-* [ ] `it('serves a file that exists at the request path')`
-* [ ] `it('sets the correct Content-Type from the file extension')`
-* [ ] `it('sets Content-Length to the file size')`
-* [ ] `it('returns false when the file does not exist, so the middleware chain continues')`
+* [x] `it('serves a file that exists at the request path')`
+* [x] `it('sets the correct Content-Type from the file extension')`
+* [x] `it('sets Content-Length to the file size')`
+* [x] `it('returns false when the file does not exist, so the middleware chain continues')`
 
 **Directory index fallback**
-* [ ] `it('serves index.html when the request path resolves to a directory containing one')`
-* [ ] `it('returns false when the request path resolves to a directory with no index.html')`
+* [x] `it('serves index.html when the request path resolves to a directory containing one')`
+* [x] `it('serves index.html when the request path has no trailing slash')` — not
+  originally scoped here; added because the request path could resolve to
+  the same directory either way and the feature doc verified both give the
+  identical result
+* [x] `it('returns false when the request path resolves to a directory with no index.html')`
 
 **Path traversal protection**
 * [ ] `it('returns 403 when the resolved path escapes the root directory')`
@@ -911,21 +915,28 @@ without losing most of the value of the test.
 * [x] `it('logger defaults to ConsoleLogger when none is provided')` (Phase 1 scope)
 * [x] `it('logger uses the provided logger when one is passed in EmpireOptions')` (Phase 1 scope)
 * [x] `it('logs a startup message through the injected logger on start()')` (Phase 1 scope, extra case)
-* [ ] `it('runs registered middleware in registration order')`
-* [ ] `it('does not proceed to the next middleware when one does not call next()')`
-* [ ] `it('dispatches to a registered route when the middleware chain completes')`
+* [x] `it('runs registered middleware in registration order')` — covered by
+  `tests/integration/MiddlewarePipeline.test.ts`'s `'runs middleware in
+  registration order'` against a real `Empire` instance rather than
+  duplicated here; see the research notes in
+  `doc/features/TEST_UPDATES_EMPIRE_STATICFILEHANDLER.md`
+* [x] `it('does not proceed to the next middleware when one does not call next()')`
+* [x] `it('dispatches to a registered route when the middleware chain completes')`
 * [ ] `it('get() registers a route reachable via the server')`
 * [ ] `it('post() registers a route reachable via the server')`
-* [ ] `it('useStaticFiles() serves a file from the given root')`
-* [ ] `it('useStaticFiles() falls through to routing when no file matches')`
-* [ ] `it('useStaticFiles() with spaFallback serves index.html for an unmatched GET path')`
+* [x] `it('useStaticFiles() serves a file from the given root')`
+* [x] `it('useStaticFiles() falls through to routing when no file matches')`
+* [x] `it('useStaticFiles() with spaFallback serves index.html for an unmatched GET path')`
 
 ### Verification
 
-* [ ] `npx vitest run` — same caveat as Phase 9.1: dependent on `npm install`
-  succeeding wherever this runs
-* [ ] `npx tsc --noEmit` — no type errors
+* [x] `npx vitest run` — 186 passed, 1 skipped (as of
+  `doc/features/TEST_UPDATES_EMPIRE_STATICFILEHANDLER.md`'s Step 6)
+* [x] `npx tsc --noEmit` — no type errors
 * [ ] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.2 complete
+  — not yet: `get()`/`post()` real-server coverage, the "Path traversal
+  protection" and most of the "Prefix matching" items above are still
+  unchecked and unverified, so Phase 9.2 isn't fully done
 
 ---
 
