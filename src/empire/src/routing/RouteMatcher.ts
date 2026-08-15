@@ -16,12 +16,9 @@ export class RouteMatcher {
         const routeSegments =
             routePath.split("/").filter(Boolean);
 
-        const requestSegments = requestPath
-            .split("/")
-            .filter(Boolean)
-            .map((segment) => decodeURIComponent(segment));
+        const requestSegments = this.splitRequestSegments(requestPath);
 
-        if (routeSegments.length !== requestSegments.length) {
+        if (!requestSegments || routeSegments.length !== requestSegments.length) {
             return {
                 matched: false,
                 params: {}
@@ -55,5 +52,31 @@ export class RouteMatcher {
             matched: true,
             params
         };
+    }
+
+    /**
+     * Splits a request path into decoded segments. Tolerates a single
+     * leading slash (every absolute path has one) and a single trailing
+     * slash ("/users" and "/users/" are the same route), but any OTHER
+     * empty segment means a doubled "//" somewhere in the path — returns
+     * null rather than silently collapsing it into a shorter match.
+     */
+    private splitRequestSegments(requestPath: string): string[] | null {
+
+        const raw = requestPath.split("/");
+
+        if (raw[0] === "") {
+            raw.shift();
+        }
+
+        if (raw.length > 0 && raw[raw.length - 1] === "") {
+            raw.pop();
+        }
+
+        if (raw.includes("")) {
+            return null;
+        }
+
+        return raw.map((segment) => decodeURIComponent(segment));
     }
 }
