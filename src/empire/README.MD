@@ -135,6 +135,42 @@ app.get("/users/:id", (ctx) => ctx.text("param"));
 **Rule of thumb:** register more specific (literal) routes before more
 general (parameterized) ones that could overlap them.
 
+## Static Files
+
+`app.useStaticFiles(root)` serves files from a directory, matched against
+the request path before routing runs:
+
+```ts
+app.useStaticFiles("./wwwroot");
+
+// GET /style.css -> serves ./wwwroot/style.css
+```
+
+Pass `{ prefix }` to mount a folder under a URL prefix instead of checking
+every request path against it directly. Multiple prefixed folders can be
+mounted on the same server without colliding:
+
+```ts
+app.useStaticFiles("./public/assets", { prefix: "/assets" });
+app.useStaticFiles("./storage/uploads", { prefix: "/uploads" });
+
+// GET /assets/logo.png  -> ./public/assets/logo.png
+// GET /uploads/file.pdf -> ./storage/uploads/file.pdf
+```
+
+If a request path resolves to a directory, an `index.html` inside it is
+served automatically — `/about/` and `/about` (no trailing slash) both
+serve `root/about/index.html`. A directory with no `index.html` inside it
+falls through instead of erroring.
+
+Pass `{ spaFallback: true }` to serve `root/index.html` for any unmatched
+`GET` request instead of a `404` — useful for single-page apps using
+client-side routing. See `examples/06-react-app` for the full behavior
+set alongside API routes.
+
+See `examples/04-static-files` for a runnable version of unprefixed and
+prefixed mounting side by side.
+
 ## Middleware
 
 Middleware can be registered using:
@@ -156,6 +192,25 @@ auth
 router
     |
 Response
+```
+
+A middleware must call `next()` to continue the chain — if it doesn't,
+the request is left unanswered (no timeout, no automatic error) rather
+than falling through to the next middleware or the router:
+
+```ts
+app.use(async (ctx, next) => {
+    console.log(ctx.method, ctx.path);
+    await next(); // continues to the next middleware / router
+});
+
+app.use(async (ctx, next) => {
+    if (!isAuthenticated(ctx)) {
+        ctx.status(401).text("Unauthorized");
+        return; // chain stops here — next() is never called
+    }
+    await next();
+});
 ```
 
 ## Logging

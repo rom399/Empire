@@ -1,15 +1,24 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, afterAll } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { Empire } from "../../src/Empire";
 import { ConsoleLogger } from "../../src/logging/ConsoleLogger";
 import { TestLogger } from "../fixtures/services/TestLogger";
 
 /**
- * Server lifecycle, logger injection (Phase 1), and routing method
- * delegation (Phase 3 — PUT/PATCH/DELETE registered via Empire reach the
- * server; GET/POST have no equivalent test here yet, and Router.test.ts
- * already covers the underlying dispatch logic these thinly wrap).
- * Middleware and static-file dispatch through Empire are covered
- * separately once those sections of Phase 9.2 are written.
+ * Server lifecycle, logger injection (Phase 1), routing method delegation
+ * (Phase 3 — PUT/PATCH/DELETE registered via Empire reach the server;
+ * GET/POST have no equivalent test here yet, and Router.test.ts already
+ * covers the underlying dispatch logic these thinly wrap), middleware
+ * pipeline behavior through Empire's real API — specifically the two
+ * cases tests/integration/MiddlewarePipeline.test.ts doesn't already
+ * cover (registration order, the double-next() guard, and error mapping
+ * are covered there; a middleware that never calls next(), and the plain
+ * success path, are covered here instead) — and useStaticFiles() through
+ * Empire's real API, previously exercised only by
+ * StaticFileStreamingAbort.test.ts, which is manual-only and gated out of
+ * the normal suite (see that file for why).
  */
 describe("Empire", () => {
 
@@ -94,6 +103,122 @@ describe("Empire", () => {
             const response = await fetch("http://127.0.0.1:47009/users/1", { method: "DELETE" });
 
             expect(response.status).toBe(204);
+        });
+    });
+
+    describe("middleware", () => {
+
+        it("does not proceed to the next middleware when one does not call next()", async () => {
+            const app = createApp(47010);
+            let secondMiddlewareRan = false;
+            let handlerRan = false;
+
+            app.use(async () => {
+                // Deliberately never calls next() — the chain should halt here.
+            });
+
+            app.use(async (_ctx, next) => {
+                secondMiddlewareRan = true;
+                await next();
+            });
+
+            app.get("/", (ctx) => {
+                handlerRan = true;
+                ctx.text("ok");
+            });
+
+            await app.start();
+
+            const controller = new AbortController();
+            const request = fetch("http://127.0.0.1:47010/", { signal: controller.signal }).catch(() => undefined);
+
+            // The first middleware never calls next(), so the pipeline halts
+            // with no response ever sent. Give it a moment to (not) progress,
+            // then abort the still-pending request so the connection actually
+            // closes — otherwise app.stop() in afterEach would hang waiting
+            // for a request that will never complete.
+            await new Promise((r) => setTimeout(r, 100));
+            controller.abort();
+            await request;
+
+            expect(secondMiddlewareRan).toBe(false);
+            expect(handlerRan).toBe(false);
+        });
+
+        it("dispatches to a registered route when the middleware chain completes", async () => {
+            const app = createApp(47011);
+            let middlewareRan = false;
+
+            app.use(async (_ctx, next) => {
+                middlewareRan = true;
+                await next();
+            });
+
+            app.get("/", (ctx) => ctx.json({ ok: true }));
+
+            await app.start();
+            const response = await fetch("http://127.0.0.1:47011/");
+
+            expect(middlewareRan).toBe(true);
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ ok: true });
+        });
+    });
+
+    describe("useStaticFiles", () => {
+
+        let dir: string;
+
+        beforeAll(() => {
+            dir = fs.mkdtempSync(path.join(os.tmpdir(), "empire-test-static-"));
+            fs.writeFileSync(path.join(dir, "hello.txt"), "hello from disk");
+            fs.writeFileSync(path.join(dir, "index.html"), "<h1>SPA shell</h1>");
+        });
+
+        afterAll(() => {
+            fs.rmSync(dir, { recursive: true, force: true });
+        });
+
+        it("useStaticFiles() serves a file from the given root", async () => {
+            const app = createApp(47012);
+            app.useStaticFiles(dir);
+
+            await app.start();
+            // Connection: close — otherwise fetch()'s keep-alive socket stays
+            // open and app.stop() (afterEach) waits ~3s for the server's own
+            // keepAliveTimeout to close it instead of returning immediately.
+            const response = await fetch("http://127.0.0.1:47012/hello.txt", {
+                headers: { connection: "close" },
+            });
+
+            expect(response.status).toBe(200);
+            expect(await response.text()).toBe("hello from disk");
+        });
+
+        it("useStaticFiles() falls through to routing when no file matches", async () => {
+            const app = createApp(47013);
+            app.useStaticFiles(dir);
+            app.get("/api/status", (ctx) => ctx.json({ ok: true }));
+
+            await app.start();
+            const response = await fetch("http://127.0.0.1:47013/api/status");
+
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ ok: true });
+        });
+
+        it("useStaticFiles() with spaFallback serves index.html for an unmatched GET path", async () => {
+            const app = createApp(47014);
+            app.useStaticFiles(dir, { spaFallback: true });
+            app.get("/api/status", (ctx) => ctx.json({ ok: true }));
+
+            await app.start();
+            const response = await fetch("http://127.0.0.1:47014/about", {
+                headers: { connection: "close" },
+            });
+
+            expect(response.status).toBe(200);
+            expect(await response.text()).toBe("<h1>SPA shell</h1>");
         });
     });
 
