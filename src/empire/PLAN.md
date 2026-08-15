@@ -20,13 +20,13 @@ Empire should eventually support:
 
 ## Current Version
 
-0.13.0 — Routing Test & Example Coverage Complete
+0.14.0 — Missing HTTP Verbs Complete
 
 **v1.0.0 blockers:** none. All Priority items are resolved — see below.
-Phase 9.1 (routing test/example coverage) and Phase 9.3 (all 13 bug-hunt
-findings) are both fully complete. Remaining work before an actual
-v1.0.0 tag is Phase 3's PUT/PATCH/DELETE/OPTIONS routes, tracked
-separately.
+Phase 9.1 (routing test/example coverage), Phase 9.3 (all 13 bug-hunt
+findings), and Phase 3's PUT/PATCH/DELETE/OPTIONS routes are all fully
+complete. Remaining Phase 3 work (route groups, wildcards, optional
+params, trailing-slash support) is lower-priority, not release-blocking.
 
 **Resolved:**
 * Context API freeze — all v1 Context members implemented
@@ -338,13 +338,35 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
   response body discarded, headers left exactly as GET would set them
   (RFC 9110 §9.3.2). `Allow` headers list `HEAD` alongside `GET` wherever
   a GET route exists, since HEAD is implicitly supported there too.
+* PUT, PATCH, DELETE routes — `app.put()`/`app.patch()`/`app.delete()`,
+  mechanically identical to `app.post()`. No changes were needed to
+  `Router.handle()`'s matching, `Allow`-header, or error-handling logic
+  to support them — all three were already fully verb-agnostic.
+* OPTIONS routes — `app.options()` for explicit registration, which works
+  through the existing dispatch loop for free, the same as PUT/PATCH/
+  DELETE. Additionally, any path with at least one other method
+  registered but no explicit OPTIONS handler automatically responds `204`
+  with an `Allow` header (RFC 9110 §9.3.7), rather than falling through
+  to a 405; an explicit `app.options()` handler always takes priority
+  over that automatic response. A path with zero matching routes still
+  404s for OPTIONS, same as every other verb — server-wide `OPTIONS *`
+  semantics are deliberately out of scope.
+
+  **Design decision:** `Allow` now includes `OPTIONS` itself automatically
+  wherever any other method is registered for a path, mirroring the
+  existing `HEAD`-alongside-`GET` precedent. This isn't an RFC 9110
+  requirement — confirmed by direct research before deciding, not
+  assumed — but is recommended practice, and an `Allow` header that
+  omitted `OPTIONS` despite the server actually supporting it there would
+  be misleading. This changed the exact `Allow` string on 4 existing
+  tests (e.g. `"GET, HEAD"` → `"GET, HEAD, OPTIONS"`) — a deliberate spec
+  change, not a bug workaround.
+
+  Full build plan and step-by-step history:
+  `doc/features/MISSING_HTTP_VERBS.md`.
 
 ### Remaining
 
-* PUT routes
-* PATCH routes
-* DELETE routes
-* OPTIONS routes
 * Route groups
 * Route-level middleware
 * Wildcard routes

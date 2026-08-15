@@ -2,9 +2,12 @@
 
 ## Status
 
-**In progress** — Steps 1–4 complete (PUT/PATCH/DELETE/OPTIONS, source +
-tests). Started 2026-08-15. Tracks PLAN.md Phase 3's "Remaining" items
-through to completion. Developed on `feature/missing-http-verbs`, not
+**Complete** — Steps 1–7 done (Step 8, final verification, runs as part
+of closing this out). Started and finished 2026-08-15. Result folded into
+PLAN.md Phase 3 and doc/PROJECT_STATE.md; kept here as the standalone
+step-by-step build record, since it has detail (live-verification
+findings, the OPTIONS decision process) that the more concise PLAN.md
+summary doesn't repeat. Developed on `feature/missing-http-verbs`, not
 directly on `main`.
 
 ## Scope
@@ -141,27 +144,42 @@ a deliberate spec change, not a bug workaround.
   in the README (`GET, HEAD, PUT, PATCH, DELETE, OPTIONS`) matches reality
   exactly rather than assuming it
 
-## Step 7 — Close out documentation (mirrors the Phase 9.1 doc-sync pattern)
+## Step 7 — Close out documentation (mirrors the Phase 9.1 doc-sync pattern) ✅
 
-- [ ] `PLAN.md` — move PUT/PATCH/DELETE/OPTIONS from Phase 3's "Remaining"
+- [x] `PLAN.md` — moved PUT/PATCH/DELETE/OPTIONS from Phase 3's "Remaining"
   to "Completed" with the same detail level as the existing HEAD/405
-  entries (RFC 9110 §9.3.7 for OPTIONS); document the OPTIONS design
-  decision the same way FINDING 11's route-precedence decision was written
-  up; trim "Remaining" to route groups/wildcards/optional params/trailing-slash;
-  version bump
-- [ ] `doc/PROJECT_STATE.md` — update the Phase 3 status line, version bump
-- [ ] `doc/ARCHITECTURE.md` — update the `Router` member table with the new
-  methods; fix the now-wrong "Method must match exactly (GET, POST — no
-  other verbs implemented yet)" line in Route Matching; version bump
-- [ ] Mark this document's Status as **Complete**, or fold its content into
-  PLAN.md and remove it — decide at the time based on whether it's still
-  useful as a standalone reference
+  entries; documented the OPTIONS design decision (RFC 9110 §9.3.7,
+  including the "confirmed via research, not assumed" note); trimmed
+  "Remaining" to route groups/wildcards/optional params/trailing-slash;
+  version bumped to 0.14.0
+- [x] `doc/PROJECT_STATE.md` — updated the Phase 3 status line (all 7
+  methods now listed), v1.0.0 Blockers and What Is Incomplete sections,
+  version bumped to match
+- [x] `doc/ARCHITECTURE.md` — added `put`/`patch`/`delete`/`options` to
+  both the `Empire` and `Router` member tables; fixed the now-wrong
+  "Method must match exactly (GET, POST — no other verbs implemented
+  yet)" line in Route Matching; version bumped to match
+- [x] Marked this document's Status as **Complete** — kept as a standalone
+  reference rather than folded away, since it has detail (live-verification
+  findings, the OPTIONS decision process) the more concise PLAN.md summary
+  doesn't repeat
 
-## Step 8 — Final verification
+## Step 8 — Final verification ✅
 
-- [ ] `npx tsc --noEmit` clean
-- [ ] `npx vitest run` — full suite green, note new total test count
-- [ ] Every new `.http` request manually exercised against a live server run
-- [ ] Confirm no regressions in existing 405/Allow-header tests — the
-  OPTIONS auto-response reuses that computation, so a bug there could
-  silently break existing coverage
+- [x] `npx tsc --noEmit` clean
+- [x] `npx vitest run` — 174/175 passing, 1 skipped (unrelated manual-only
+  test), up from 157/158 before this feature started
+- [x] Every new `.http` request manually exercised against a live server
+  run (Step 5), plus a second standalone live check for the README's
+  code samples specifically (Step 6)
+- [x] No regressions in existing 405/Allow-header tests — all 4 updated to
+  the new expected strings and passing; the OPTIONS auto-response's
+  reuse of that same `allowedMethods` computation is exercised by both
+  the 405 and 204 test paths
+
+**Feature complete.** All 4 HTTP verbs (PUT, PATCH, DELETE, OPTIONS) plus
+HEAD auto-dispatch are implemented, tested at 3 levels (Router unit,
+Empire unit, real-server integration), demonstrated in
+`examples/02-routing` and `tests/http/routing.http`, documented in
+`README.MD`, and reflected across `PLAN.md`/`doc/PROJECT_STATE.md`/
+`doc/ARCHITECTURE.md`.

@@ -2,17 +2,17 @@
 
 ## Current Version
 
-**0.13.0 — Routing Test & Example Coverage Complete**
+**0.14.0 — Missing HTTP Verbs Complete**
 
 ---
 
 ## v1.0.0 Blockers
 
 **None remaining.** Every Priority item in PLAN.md is resolved. Phase 9.1
-(routing/static test and example coverage) and Phase 9.3 (all 13 bug-hunt
-findings) are both fully complete. What's left before an actual v1.0.0
-tag is the remaining HTTP verbs (Phase 3) — tracked as normal roadmap
-work, not a release blocker.
+(routing/static test and example coverage), Phase 9.3 (all 13 bug-hunt
+findings), and Phase 3's PUT/PATCH/DELETE/OPTIONS routes are all fully
+complete. Remaining Phase 3 work (route groups, wildcards, optional
+params, trailing-slash support) is lower-priority, not release-blocking.
 
 ---
 
@@ -108,9 +108,10 @@ Resolved:
 - `LoggerMiddleware` — logs method and URL
 - `AuthMiddleware` — stub, always authorized
 
-### Phase 3 — Routing ✅ (GET, POST, and HEAD; PUT/PATCH/DELETE/OPTIONS still open)
+### Phase 3 — Routing ✅ (all 7 methods; route groups/wildcards/optional params/trailing-slash still open)
 - Route table with registration order matching, owned by `Router` (`src/routing/`)
-- `app.get()` and `app.post()` — delegate to `Router.get()`/`Router.post()`
+- `app.get()`, `app.post()`, `app.put()`, `app.patch()`, `app.delete()`,
+  `app.options()` — delegate to the matching `Router` method
 - `RouteMatcher` — segment-based path matching, extracted from `Empire.ts`
 - Route parameters via `:name` syntax → `ctx.params`
 - 404 response when no route matches any registered path
@@ -120,8 +121,13 @@ Resolved:
 - HEAD requests are auto-dispatched to the matching GET handler with the
   response body discarded before it reaches the client, while headers
   (Content-Type, Content-Length, etc.) are left exactly as GET would set
-  them — RFC 9110 §9.3.2. `Allow` headers include `HEAD` alongside `GET`
-  wherever a GET route exists.
+  them — RFC 9110 §9.3.2.
+- OPTIONS requests automatically respond `204` with an `Allow` header when
+  no explicit `app.options()` handler is registered for the path but other
+  methods are — RFC 9110 §9.3.7. An explicit handler takes priority.
+  `Allow` includes `OPTIONS` itself wherever any other method is
+  registered, the same way `HEAD` is included wherever `GET` is — see
+  `doc/features/MISSING_HTTP_VERBS.md` for the design decision.
 
 ### Phase 4 — Context ✅ (API frozen for v1)
 - `Context` class wrapping `IncomingMessage` and `ServerResponse`
@@ -213,8 +219,8 @@ Post-v1 only (requires DI):
 ## What Is Incomplete
 
 No v1.0.0 blockers remain. Outstanding roadmap work not gating v1.0.0:
-- Phase 3 — PUT/PATCH/DELETE/OPTIONS routes (HEAD is done), route groups,
-  wildcards
+- Phase 3 — route groups, route-level middleware, wildcard routes,
+  optional parameters, trailing-slash support (all 7 HTTP methods done)
 
 ---
 

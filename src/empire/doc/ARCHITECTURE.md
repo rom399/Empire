@@ -7,7 +7,7 @@ built-in `http` module. It has no runtime dependencies. The design is inspired b
 ASP.NET Core — middleware pipelines, dependency injection, strongly-typed context,
 and a clean separation of concerns.
 
-Current version: **0.13.0 — Routing Test & Example Coverage Complete**. See
+Current version: **0.14.0 — Missing HTTP Verbs Complete**. See
 `doc/PROJECT_STATE.md` for the up-to-date status and `PLAN.md` for the full
 phase-by-phase roadmap. No v1.0.0 blockers remain.
 
@@ -170,6 +170,10 @@ new Empire(options: EmpireOptions)
 | `useStaticFiles(root, options?)` | Registers static file middleware for a directory. Optional `{ prefix }` mounts it under a URL prefix — see "Static Files API" below. Optional `{ spaFallback: true }` registers `root/index.html` as the router's fallback — see "SPA / React Router Fallback" below |
 | `get(path, handler)` | Registers a GET route — delegates to `router.get()` |
 | `post(path, handler)` | Registers a POST route — delegates to `router.post()` |
+| `put(path, handler)` | Registers a PUT route — delegates to `router.put()` |
+| `patch(path, handler)` | Registers a PATCH route — delegates to `router.patch()` |
+| `delete(path, handler)` | Registers a DELETE route — delegates to `router.delete()` |
+| `options(path, handler)` | Registers an explicit OPTIONS route — delegates to `router.options()`. Optional; see `Router.handle()` below for the automatic OPTIONS response when no explicit handler is registered |
 | `start()` | Starts the HTTP server — returns Promise |
 | `stop()` | Stops the HTTP server — returns Promise |
 | `logger` | Returns the ILogger instance |
@@ -193,8 +197,12 @@ new Router(logger: ILogger)
 |--------|-------------|
 | `get(path, handler)` | Registers a handler for GET requests |
 | `post(path, handler)` | Registers a handler for POST requests |
+| `put(path, handler)` | Registers a handler for PUT requests |
+| `patch(path, handler)` | Registers a handler for PATCH requests |
+| `delete(path, handler)` | Registers a handler for DELETE requests |
+| `options(path, handler)` | Registers a handler for OPTIONS requests. Optional — any path with at least one other method registered already answers OPTIONS automatically (204 + `Allow` header, RFC 9110 §9.3.7) without one; register a handler here only for custom behaviour (e.g. CORS preflight), which always takes priority over the automatic response |
 | `setFallback(handler)` | Registers a handler invoked instead of the plain-text 404 when no route matches a **GET** request — see "SPA / React Router Fallback" below. Only one fallback can be registered; a later call replaces the previous one |
-| `handle(req, res, ctx?)` | Matches the request against registered routes (first match wins) and invokes the handler, converting thrown errors into the correct response. Falls back to the registered fallback (GET only), or 404, when nothing matches. `ctx` is optional — when `Empire` supplies the `Context` it already built for the middleware chain, `handle()` reuses that exact instance (attaching matched params to it) instead of constructing a new one, so state middleware attached to `ctx` survives into the route handler. Omitting it (as every direct test call does) preserves the old behaviour of building a fresh `Context` internally |
+| `handle(req, res, ctx?)` | Matches the request against registered routes (first match wins) and invokes the handler, converting thrown errors into the correct response. HEAD dispatches to the matching GET handler; OPTIONS with no explicit handler gets the automatic 204 response described above. Falls back to the registered fallback (GET only), a 405 + `Allow` when the path matches under a different method, or 404, when nothing matches. `ctx` is optional — when `Empire` supplies the `Context` it already built for the middleware chain, `handle()` reuses that exact instance (attaching matched params to it) instead of constructing a new one, so state middleware attached to `ctx` survives into the route handler. Omitting it (as every direct test call does) preserves the old behaviour of building a fresh `Context` internally |
 
 Uses a `RouteMatcher` internally for path/segment comparison. Route and
 fallback dispatch share error handling via a private `invokeHandler()`, so
@@ -516,7 +524,9 @@ wins.
 - Segments starting with `:` are treated as parameters — the value is captured
   into `ctx.params`
 - Query strings are stripped before matching (`/users?page=1` matches `/users`)
-- Method must match exactly (`GET`, `POST` — no other verbs implemented yet)
+- Method must match exactly — GET, POST, PUT, PATCH, DELETE, and OPTIONS
+  are all implemented; HEAD dispatches to a matching GET route instead of
+  needing its own registration
 
 Example:
 
