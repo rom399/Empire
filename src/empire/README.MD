@@ -215,6 +215,57 @@ app.use(async (ctx, next) => {
 });
 ```
 
+## Error Handling
+
+`HttpError` is the base class for an error that should become a specific
+HTTP response. Throw one from a route handler or a middleware with a status
+code and a message:
+
+```ts
+import { HttpError } from "./src/errors/HttpError";
+
+app.get("/products/:id", (ctx) => {
+    if (!isValidId(ctx.params.id)) {
+        throw new HttpError(404, `Product with id ${ctx.params.id} was not found`);
+    }
+    ctx.json({ id: ctx.params.id });
+});
+```
+
+`BadRequestError(message)` is a shorthand for `new HttpError(400, message)`.
+It is already used internally: `ctx.jsonBody()` throws it on invalid JSON,
+and `ctx.form()` throws it when the Content-Type does not match.
+
+An error thrown inside a route handler (or the SPA fallback handler) is
+caught by `Router`. An error thrown inside a middleware, or by the routing
+step itself before a handler runs, is caught separately by `Empire`'s own
+request handler. Both use the same mapping, so from the client's side the
+response looks identical either way: an `HttpError` becomes its own status
+code with a JSON body, `{ "error": "<message>" }`. Anything else, a plain
+`Error` or any other thrown value, always becomes a `500` with a generic
+body, `{ "error": "Internal Server Error" }` - the real message is never
+sent to the client, only logged server-side via `app.logger.error()`.
+
+```ts
+app.get("/crash", () => {
+    throw new Error("boom"); // -> 500, { "error": "Internal Server Error" }
+});
+```
+
+There is no configurable or replaceable error handler. The mapping described
+above is fixed logic inside `Empire.ts` and `Router.ts` - there is currently
+no hook to register a custom handler or change the response shape.
+
+One sharp edge worth knowing: both catch sites check whether a response has
+already been sent before writing anything. A handler that starts streaming a
+response (for example `ctx.file()`) and then errors partway through will not
+get a conflicting second response written on top of the first - but it also
+will not get a clean error response. The client is left with a truncated
+response and no error body.
+
+See `examples/05-error-handling` for a runnable version of all of the above,
+including the always-500 `/crash` route.
+
 ## Logging
 
 Empire provides a logging abstraction.
