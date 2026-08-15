@@ -57,6 +57,17 @@ app.get("/users/:id", (ctx) => {
 });
 ```
 
+A route can have more than one `:param` segment:
+
+```ts
+app.get("/users/:userId/posts/:postId", (ctx) => {
+    ctx.json({ userId: ctx.params.userId, postId: ctx.params.postId });
+});
+```
+
+See `examples/02-routing` for a runnable version of both, alongside query
+strings and a realistic REST-style user API.
+
 **Routes are matched in registration order, and the first match wins —
 this is the developer's responsibility to get right, not something Empire
 resolves automatically.** If two registered routes could both match the

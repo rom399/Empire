@@ -1,0 +1,42 @@
+### List all users
+GET http://localhost:8002/users
+
+### Filter users by role (query string)
+GET http://localhost:8002/users?role=admin
+
+### Get a single user by :id
+GET http://localhost:8002/users/1
+
+### /users/me — literal route registered before /users/:id, so it wins
+### instead of being matched as :id="me" (which would 404 — no user has
+### id "me"). Proves registration order, not just that a response comes back.
+GET http://localhost:8002/users/me
+
+### Create a user
+POST http://localhost:8002/users
+Content-Type: application/json
+
+{
+    "name": "Dana",
+    "role": "user"
+}
+
+### List a user's posts
+GET http://localhost:8002/users/1/posts
+
+### Get one specific post — multi-param route, both :userId and :postId
+GET http://localhost:8002/users/1/posts/101
+
+### Wrong postId for a real user — 404 via app logic, not routing
+GET http://localhost:8002/users/1/posts/999
+
+### Unmatched path — no route registered for this at all, plain-text 404
+GET http://localhost:8002/nonexistent
+
+### HEAD auto-dispatches to the matching GET handler, body discarded,
+### headers (Content-Type/Content-Length) still set as GET would
+HEAD http://localhost:8002/users/1
+
+### DELETE has no handler on /users/1, but GET/POST do elsewhere on
+### /users — 405 with an Allow header, not 404
+DELETE http://localhost:8002/users/1
