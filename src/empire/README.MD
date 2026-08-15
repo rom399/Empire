@@ -280,17 +280,39 @@ deliberately small limit so the 413 response is easy to trigger.
 ## Project Structure
 
 ```text
-rom-server/
-├── README.md
+empire/
+├── src/
+│   ├── Empire.ts
+│   ├── types.ts
+│   ├── http/          Context, CookieOptions
+│   ├── routing/        Route, RouteMatch, RouteMatcher, Router
+│   ├── middleware/      LoggerMiddleware, AuthMiddleware
+│   ├── static/          MimeTypes, StaticFileHandler and its option types
+│   ├── errors/          HttpError, BadRequestError, HttpErrorOptions
+│   ├── logging/         ILogger, ConsoleLogger
+│   └── di/              empty, Phase 10 placeholder
+├── examples/
+│   ├── 01-basic-server/
+│   ├── 02-routing/
+│   ├── 03-middleware/
+│   ├── 04-static-files/
+│   ├── 05-error-handling/
+│   ├── 06-react-app/
+│   └── 07-body-size-limit/
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── http/
+│   └── fixtures/
+├── doc/
+│   ├── ARCHITECTURE.md
+│   ├── PROJECT_STATE.md
+│   └── features/
+├── README.MD
 ├── PLAN.md
+├── CONTRIBUTING.md
 ├── package.json
-├── tsconfig.json
-├── server.ts
-└── src/
-    ├── Empire.ts
-    ├── types.ts
-    ├── middleware/
-    └── logging/
+└── tsconfig.json
 ```
 
 ## Motivation
