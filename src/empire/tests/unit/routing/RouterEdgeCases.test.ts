@@ -9,8 +9,10 @@ import { createMockRequest, createMockResponse } from "../../fixtures/http/MockH
  * while Context.path uses URL.pathname, so the two disagree about what the
  * request path is.
  *
- * FINDING 11 — matching is first-registered-wins, which is reasonable but
- * undocumented and easy to get wrong.
+ * FINDING 11 — matching is first-registered-wins. Confirmed as intended
+ * behavior, not a bug: registration order is the developer's
+ * responsibility, now documented in the README's "Routing" section. The
+ * tests below pin down both directions of that contract.
  *
  * FINDING 12 — RouteMatcher filters empty segments, so "//users//1" matches
  * "/users/:id". Multiple URLs map to one route with no canonical form.
@@ -90,12 +92,24 @@ describe("Router edge cases", () => {
 
     describe("registration order", () => {
 
-        it("prefers a literal segment over a parameter regardless of order", async () => {
+        it("matches in registration order — a parameter route registered first wins even over a more specific literal route", async () => {
             const router = new Router(new TestLogger());
 
-            // Registered param-first on purpose.
+            // Registered param-first on purpose — this is the documented,
+            // decided behavior: registration order is authoritative.
             router.get("/users/:id", (ctx) => ctx.text("param"));
             router.get("/users/new", (ctx) => ctx.text("literal"));
+
+            const res = await dispatch(router, "/users/new");
+
+            expect(res.body).toBe("param");
+        });
+
+        it("registering the literal route first lets it win over a parameter route", async () => {
+            const router = new Router(new TestLogger());
+
+            router.get("/users/new", (ctx) => ctx.text("literal"));
+            router.get("/users/:id", (ctx) => ctx.text("param"));
 
             const res = await dispatch(router, "/users/new");
 

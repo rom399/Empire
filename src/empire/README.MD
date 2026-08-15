@@ -46,6 +46,44 @@ async function main() {
 main();
 ```
 
+## Routing
+
+Routes are registered with `app.get()` and `app.post()`, with `:param`
+segments captured into `ctx.params`:
+
+```ts
+app.get("/users/:id", (ctx) => {
+    ctx.json({ id: ctx.params.id });
+});
+```
+
+**Routes are matched in registration order, and the first match wins —
+this is the developer's responsibility to get right, not something Empire
+resolves automatically.** If two registered routes could both match the
+same request, whichever was registered first is used, even if the other
+looks like the "more specific" match:
+
+```ts
+app.get("/users/:id", (ctx) => ctx.text("param"));
+app.get("/users/new", (ctx) => ctx.text("literal"));
+
+// GET /users/new -> "param" — :id already matched "new" first.
+// The /users/new route above is unreachable.
+```
+
+To get the literal route to win, register it first:
+
+```ts
+app.get("/users/new", (ctx) => ctx.text("literal"));
+app.get("/users/:id", (ctx) => ctx.text("param"));
+
+// GET /users/new -> "literal"
+// GET /users/42  -> "param"
+```
+
+**Rule of thumb:** register more specific (literal) routes before more
+general (parameterized) ones that could overlap them.
+
 ## Middleware
 
 Middleware can be registered using:
