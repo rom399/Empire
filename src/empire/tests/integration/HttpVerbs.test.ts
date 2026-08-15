@@ -3,11 +3,12 @@ import { Empire } from "../../src/Empire";
 import { TestLogger } from "../fixtures/services/TestLogger";
 
 /**
- * Real-server coverage for PUT/PATCH/DELETE (Missing HTTP Verbs, Step 2c —
+ * Real-server coverage for PUT/PATCH/DELETE/OPTIONS (Missing HTTP Verbs —
  * see doc/MISSING_HTTP_VERBS.md). Router.test.ts already proves basic
  * dispatch works via mocks; this proves the same verbs work end to end
- * with real request bodies and real app-level logic on top, the way an
- * actual REST resource would use them.
+ * with real request bodies, real app-level logic, and real response
+ * headers over an actual socket, the way an actual REST resource would
+ * use them.
  */
 describe("PUT / PATCH / DELETE", () => {
 
@@ -95,5 +96,47 @@ describe("PUT / PATCH / DELETE", () => {
         const res = await fetch(`http://127.0.0.1:${port}/users/999`, { method: "DELETE" });
 
         expect(res.status).toBe(404);
+    });
+});
+
+describe("OPTIONS", () => {
+
+    let app: Empire | undefined;
+    let port = 43900;
+
+    afterEach(async () => {
+        await app?.stop();
+        app = undefined;
+    });
+
+    function makeApp(): Empire {
+        port += 1;
+        app = new Empire({ host: "127.0.0.1", port, logger: new TestLogger() });
+        return app;
+    }
+
+    it("responds 204 with a real Allow header over an actual socket", async () => {
+        const a = makeApp();
+        a.get("/users", (ctx) => ctx.json({}));
+        a.post("/users", (ctx) => ctx.json({}));
+
+        await a.start();
+        const res = await fetch(`http://127.0.0.1:${port}/users`, { method: "OPTIONS" });
+
+        expect(res.status).toBe(204);
+        expect(res.headers.get("allow")).toBe("GET, HEAD, POST, OPTIONS");
+    });
+
+    it("lets an explicit options() handler override the automatic response", async () => {
+        const a = makeApp();
+        a.get("/users", (ctx) => ctx.json({}));
+        a.options("/users", (ctx) => ctx.status(200).header("X-Custom", "yes").text("custom"));
+
+        await a.start();
+        const res = await fetch(`http://127.0.0.1:${port}/users`, { method: "OPTIONS" });
+
+        expect(res.status).toBe(200);
+        expect(res.headers.get("x-custom")).toBe("yes");
+        expect(await res.text()).toBe("custom");
     });
 });

@@ -2,8 +2,10 @@
 
 ## Status
 
-**In progress.** Started 2026-08-15. Tracks PLAN.md Phase 3's "Remaining"
-items through to completion.
+**In progress** — Steps 1–4 complete (PUT/PATCH/DELETE/OPTIONS, source +
+tests). Started 2026-08-15. Tracks PLAN.md Phase 3's "Remaining" items
+through to completion. Developed on `feature/missing-http-verbs`, not
+directly on `main`.
 
 ## Scope
 
@@ -58,30 +60,44 @@ Verified: `tsc --noEmit` clean, targeted tests 36/36 passing, full suite
 167/168 passing (up from 157/158, 1 unrelated manual-only skip), no
 regressions.
 
-## Step 3 — OPTIONS: source changes
+## Step 3 — OPTIONS: source changes ✅
 
-- [ ] `src/routing/Router.ts` — add `options(path, handler)` for explicit
+- [x] `src/routing/Router.ts` — added `options(path, handler)` for explicit
   registration
-- [ ] `handle()` — when method is OPTIONS and no explicit OPTIONS route
-  matches but other methods do, short-circuit to 204 + Allow header,
-  reusing the existing `allowedMethods` set built for the 405 path (not a
-  parallel implementation)
-- [ ] Explicit OPTIONS handler (if registered) takes priority over the
-  automatic response
-- [ ] OPTIONS to a path with zero matching routes still falls through to 404
-- [ ] Update `handle()`'s JSDoc to describe the new dispatch path
-- [ ] `src/Empire.ts` — add `options()` delegating to `router.options()`
+- [x] `handle()` — when method is OPTIONS and no explicit OPTIONS route
+  matches but other methods do, short-circuits to 204 + Allow header,
+  reusing the existing `allowedMethods` set built for the 405 path (added
+  `allowedMethods.add("OPTIONS")` right before both the 204 and 405
+  branches — same set, not a parallel implementation)
+- [x] Explicit OPTIONS handler (when registered) takes priority — this came
+  for free from the existing dispatch loop, no special-casing needed, the
+  same way PUT/PATCH/DELETE did
+- [x] OPTIONS to a path with zero matching routes still falls through to 404
+- [x] Updated `handle()`'s JSDoc to describe the new dispatch path
+- [x] `src/Empire.ts` — added `options()` delegating to `router.options()`
 
-## Step 4 — OPTIONS: tests
+**Design decision confirmed with the user, including verifying the RFC
+9110 claim before finalizing:** `Allow` now includes `OPTIONS`
+automatically wherever any other method is registered for a path — RFC
+9110 doesn't *require* this (confirmed via direct research, not assumed),
+but does recommend it as good practice, and it's consistent with the
+existing HEAD-in-Allow precedent already in this codebase. This changed 4
+existing test assertions (e.g. `"GET, HEAD"` → `"GET, HEAD, OPTIONS"`) —
+a deliberate spec change, not a bug workaround.
 
-- [ ] `tests/unit/routing/Router.test.ts` — new `describe("OPTIONS")` block
-  mirroring the `describe("HEAD")` structure: 204 + Allow header listing
+## Step 4 — OPTIONS: tests ✅
+
+- [x] `tests/unit/routing/Router.test.ts` — new `describe("OPTIONS")` block
+  mirroring `describe("HEAD")`'s structure: 204 + Allow header listing
   every registered method; HEAD included alongside GET in that list (same
   computation as 405, not a divergent copy); explicit OPTIONS handler takes
   priority when registered; 404 for OPTIONS on a fully unregistered path;
-  no body by default
-- [ ] `tests/integration/` — real-server OPTIONS request via `fetch()`,
-  checking the actual `Allow` header over a real socket
+  no body by default. Updated 4 pre-existing 405 Allow-header assertions
+  to include `, OPTIONS` per the design decision above.
+- [x] `tests/integration/HttpVerbs.test.ts` — new `describe("OPTIONS")`
+  block: real-server 204 + Allow header via `fetch()` over an actual
+  socket, and an explicit `options()` handler overriding the automatic
+  response with custom status/headers/body
 
 ## Step 5 — Examples
 

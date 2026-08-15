@@ -143,6 +143,10 @@ export class Empire {
     this.router.delete(path, handler);
   }
 
+  public options(path: string, handler: RouteHandler): void {
+    this.router.options(path, handler);
+  }
+
   public get logger(): ILogger {
     return this._logger;
   }

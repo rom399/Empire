@@ -126,7 +126,7 @@ describe("Router", () => {
             await router.handle(req, res);
 
             expect(res.statusCode).toBe(405);
-            expect(res.getHeader("Allow")).toBe("GET, HEAD");
+            expect(res.getHeader("Allow")).toBe("GET, HEAD, OPTIONS");
         });
 
         it("lists every registered method in Allow when a path has more than one", async () => {
@@ -141,7 +141,7 @@ describe("Router", () => {
             await router.handle(req, res);
 
             expect(res.statusCode).toBe(405);
-            expect(res.getHeader("Allow")).toBe("GET, HEAD, POST, PUT");
+            expect(res.getHeader("Allow")).toBe("GET, HEAD, POST, PUT, OPTIONS");
         });
 
         it("returns the HttpError status code and JSON body when a handler throws HttpError", async () => {
@@ -245,7 +245,7 @@ describe("Router", () => {
             await router.handle(req, res);
 
             expect(res.statusCode).toBe(405);
-            expect(res.getHeader("Allow")).toBe("POST");
+            expect(res.getHeader("Allow")).toBe("POST, OPTIONS");
         });
 
         it("includes HEAD in the Allow header alongside GET on a 405 for a different path's method", async () => {
@@ -258,7 +258,7 @@ describe("Router", () => {
             await router.handle(req, res);
 
             expect(res.statusCode).toBe(405);
-            expect(res.getHeader("Allow")).toBe("GET, HEAD");
+            expect(res.getHeader("Allow")).toBe("GET, HEAD, OPTIONS");
         });
 
         it("returns 404 when no route matches the path at all", async () => {
@@ -271,6 +271,73 @@ describe("Router", () => {
             await router.handle(req, res);
 
             expect(res.statusCode).toBe(404);
+        });
+    });
+
+    describe("OPTIONS", () => {
+
+        it("responds 204 with an Allow header listing every method registered for the path", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({}));
+            router.post("/users", (ctx) => ctx.json({}));
+
+            const req = createMockRequest({ method: "OPTIONS", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(204);
+            expect(res.getHeader("Allow")).toBe("GET, HEAD, POST, OPTIONS");
+        });
+
+        it("lists HEAD alongside GET in the OPTIONS Allow header, same as the 405 case", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({}));
+
+            const req = createMockRequest({ method: "OPTIONS", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.getHeader("Allow")).toBe("GET, HEAD, OPTIONS");
+        });
+
+        it("dispatches to an explicitly registered OPTIONS handler instead of the automatic response, when one exists", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({}));
+            router.options("/users", (ctx) => ctx.status(200).json({ custom: true }));
+
+            const req = createMockRequest({ method: "OPTIONS", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toBe(JSON.stringify({ custom: true }));
+        });
+
+        it("returns 404 for OPTIONS on a path with no registered routes at all", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({}));
+
+            const req = createMockRequest({ method: "OPTIONS", url: "/nope" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(404);
+        });
+
+        it("has no body by default", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users", (ctx) => ctx.json({}));
+
+            const req = createMockRequest({ method: "OPTIONS", url: "/users" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.body).toBe("");
         });
     });
 
