@@ -2,16 +2,17 @@
 
 ## Current Version
 
-**0.12.0 — Critical Bug Fixes (Regression Test Suite)**
+**0.13.0 — Routing Test & Example Coverage Complete**
 
 ---
 
 ## v1.0.0 Blockers
 
-**None remaining.** Every Priority item in PLAN.md is resolved. What's left
-before an actual v1.0.0 tag is routing/static test coverage (Phase 9.1),
-the 9 open bug-hunt findings (Phase 9.3, below), and the remaining HTTP
-verbs (Phase 3) — tracked as normal roadmap work, not release blockers.
+**None remaining.** Every Priority item in PLAN.md is resolved. Phase 9.1
+(routing/static test and example coverage) and Phase 9.3 (all 13 bug-hunt
+findings) are both fully complete. What's left before an actual v1.0.0
+tag is the remaining HTTP verbs (Phase 3) — tracked as normal roadmap
+work, not a release blocker.
 
 ---
 
@@ -21,30 +22,43 @@ Writing test coverage for `Context`, `Router`, `StaticFileHandler`, and
 `Empire` (Phase 9.2) surfaced 13 real behavioural bugs, each pinned down
 with a `FINDING N` comment in the test that catches it
 (`tests/integration/`, plus new files under `tests/unit/`). Full detail —
-root cause, fix, files touched — is in PLAN.md Phase 9.3. Summary:
+root cause, fix, files touched — is in PLAN.md Phase 9.3.
 
-**Fixed (4):**
+**All 13 findings are resolved:**
 - FINDING 1 — middleware and route handlers saw two different `Context`
   instances; state attached by middleware was silently lost
+- FINDING 2 — static-file path-traversal guard used a bare `startsWith`,
+  admitting a sibling directory that merely shares the root's prefix
+  (hardening only — not exploitable through Empire's own pipeline)
 - FINDING 3 — a throwing middleware had no error handling, leaving the
   connection hanging instead of returning a response
 - FINDING 4 — calling `next()` twice re-dispatched the router against an
   already-sent response instead of erroring
+- FINDING 5 — the built-in `LoggerMiddleware`/`AuthMiddleware` called
+  `next()` without awaiting or returning it
 - FINDING 6 — `ctx.body()` re-read the request stream on every call
   instead of caching it, so a second read (e.g. by middleware, then the
   handler) silently returned `""`
+- FINDING 7 — `ctx.body()` had no size cap; now rejects with 413 past a
+  configurable `maxBodySize` (default 1MB)
+- FINDING 8 — `sendFile()` only settled on `"finish"`, hanging and
+  leaking a file descriptor if the client aborted mid-stream — fixed in
+  both `Context.ts` and the duplicated pattern in `StaticFileHandler.ts`
+- FINDING 9 — static files ignored `req.method`; HEAD now skips reading
+  the file entirely instead of streaming and discarding it
+- FINDING 10 — route params were never URL-decoded, and `Context.path`
+  didn't match either — both now decode consistently
+- FINDING 11 — route matching is first-registered-wins by design
+  decision, not a bug; documented in README.MD's "Routing" section
+- FINDING 12 — `RouteMatcher` silently collapsed doubled slashes
+  (`//users//1` matching `/users/:id`) via `.filter(Boolean)`
+- FINDING 13 — `HttpError` had no `code`/`retryable` and didn't set
+  `.name`, so every framework error serialised as generic `"Error"`
 
-**Open (9):** FINDING 2 (static-file path-traversal boundary — defence in
-depth, not currently exploitable), 5 (built-in middleware don't
-await/return `next()`), 7 (no request body size limit), 8 (`sendFile()`
-hangs if the client aborts mid-stream), 9 (HEAD requests to static files
-get a full body), 10 (route params not URL-decoded), 11 (no
-literal-over-parameter route precedence), 12 (empty path segments like
-`//users//1` incorrectly match), 13 (`HttpError` has no `code`/`retryable`
-and doesn't set `.name`).
-
-Current test status: **16 of 128 tests fail**, all against the 9 open
-findings above — run `npm test` to see them.
+Current test status: **158 tests, 157 passing, 1 skipped** (a manual-only
+test for FINDING 8's `StaticFileHandler` half — flaky under full-suite
+parallelism for reasons not fully isolated; run via `RUN_FLAKY_TESTS=true
+npx vitest run tests/integration/StaticFileStreamingAbort.test.ts`).
 
 Resolved:
 - ~~0 — Context API freeze~~ — all v1 Context members implemented
@@ -157,7 +171,7 @@ Post-v1 only (requires DI):
   (GET only) serves the SPA shell if routing also finds no match
 
 ### Phase 8 — Developer Experience ✅ (partial)
-- Six numbered example applications (ports 8001–8006)
+- Seven numbered example applications (ports 8001–8007)
 - `npm start` script
 - `.npmignore`
 - REST client test files
@@ -170,7 +184,7 @@ Post-v1 only (requires DI):
 - `tests/unit/`, `tests/http/`, `tests/fixtures/`
 - `doc/` directory with architecture and state documents
 
-### Phase 9.1 — Routing Test Coverage ✅ (unit tests only — examples not yet added)
+### Phase 9.1 — Routing Test & Example Coverage ✅
 - `vitest` added as a dev dependency, `npm test` runs `vitest run`
 - `tests/fixtures/services/TestLogger.ts` — in-memory `ILogger` for tests
 - `tests/fixtures/http/MockHttp.ts` — minimal `http.IncomingMessage` /
@@ -181,13 +195,18 @@ Post-v1 only (requires DI):
 - `Route.test.ts` / `RouteMatch.test.ts` — deliberately skipped, plain
   interfaces with no behavior
 - Runs directly via `npm test` / `npx vitest run` — the earlier sandbox
-  restriction on `npm install` no longer applies. (These 20 cases, plus
-  everything added since in Phase 9.2 and 9.3, run as part of the same
-  128-test suite.)
-- Still open: the Examples/Test Fixtures items in PLAN.md Phase 9.1 (a
-  multi-param route example, an overlapping-route example, and
-  corresponding `.http` requests) — not part of unit test coverage, not
-  yet started
+  restriction on `npm install` no longer applies
+- `examples/02-routing/server.ts` — multi-param route
+  (`/users/:userId/posts/:postId`, backed by a real `posts` array instead
+  of the old empty-stub) and overlapping routes (`/users/me` registered
+  before `/users/:id`, demonstrating registration-order-wins)
+- `tests/http/routing.http` — one request per route plus the unmatched-path
+  404, HEAD auto-dispatch, and 405+Allow behaviors
+- `tests/integration/RoutingPatterns.test.ts` — end-to-end coverage of the
+  same patterns over a real HTTP server with real app-level logic on top
+  (e.g. a valid `:userId` with a `:postId` that doesn't belong to it),
+  which the lower-level `RouteMatcher`/`Router` unit tests don't touch
+- All requests in `routing.http` manually verified against a live server run
 
 ---
 
@@ -196,19 +215,14 @@ Post-v1 only (requires DI):
 No v1.0.0 blockers remain. Outstanding roadmap work not gating v1.0.0:
 - Phase 3 — PUT/PATCH/DELETE/OPTIONS routes (HEAD is done), route groups,
   wildcards
-- Phase 9.1 — routing example additions (multi-param, overlapping routes)
-  and their `.http` requests
-- Phase 9.3 — 9 open bug-hunt findings; see "Bug Hunt" above and PLAN.md
-  Phase 9.3 for full detail on each
 
 ---
 
 ## Next Major Milestone — Phase 10: Dependency Injection
 
-All v1.0.0 blockers are resolved, so Phase 10 can begin. Phase 9.1 (test
-coverage) is recommended first, since DI will sit on top of `Router` and
-benefits from a tested foundation underneath it — but it isn't a hard
-prerequisite.
+All v1.0.0 blockers are resolved, and Phase 9.1's test/example coverage —
+recommended as a foundation before DI sits on top of `Router` — is
+complete. Phase 10 can begin whenever it's picked up.
 
 Target API:
 ```ts
@@ -256,4 +270,4 @@ D:/dev/ROM/
 
 Git repository root: `D:/dev/ROM`
 Project root: `D:/dev/ROM/src/empire`
-Branch: `master`
+Branch: `main` (tracks `origin/main` on `github.com:rom399/Empire.git`)

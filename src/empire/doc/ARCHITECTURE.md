@@ -7,7 +7,7 @@ built-in `http` module. It has no runtime dependencies. The design is inspired b
 ASP.NET Core — middleware pipelines, dependency injection, strongly-typed context,
 and a clean separation of concerns.
 
-Current version: **0.12.0 — Critical Bug Fixes (Regression Test Suite)**. See
+Current version: **0.13.0 — Routing Test & Example Coverage Complete**. See
 `doc/PROJECT_STATE.md` for the up-to-date status and `PLAN.md` for the full
 phase-by-phase roadmap. No v1.0.0 blockers remain.
 
@@ -84,7 +84,8 @@ empire/
 ├── examples/
 │   ├── basic-server/               # Original dev server
 │   ├── 01-basic-server/            # Hello world
-│   ├── 02-routing/                 # Route params and query strings
+│   ├── 02-routing/                 # Route params (single and multi-segment), query
+│   │                                # strings, overlapping literal/param routes
 │   ├── 03-middleware/              # Middleware pipeline
 │   ├── 04-static-files/            # Static file serving — unprefixed wwwroot/ and prefixed uploads/
 │   ├── 05-error-handling/          # HttpError and BadRequestError

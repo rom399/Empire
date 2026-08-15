@@ -20,12 +20,13 @@ Empire should eventually support:
 
 ## Current Version
 
-0.12.0 — Critical Bug Fixes (Regression Test Suite)
+0.13.0 — Routing Test & Example Coverage Complete
 
 **v1.0.0 blockers:** none. All Priority items are resolved — see below.
-Remaining work before an actual v1.0.0 tag is Phase 9.1 (routing/static
-test coverage), Phase 9.3 (9 open bug-hunt findings, below), and Phase 3's
-PUT/PATCH/DELETE routes, tracked separately.
+Phase 9.1 (routing test/example coverage) and Phase 9.3 (all 13 bug-hunt
+findings) are both fully complete. Remaining work before an actual
+v1.0.0 tag is Phase 3's PUT/PATCH/DELETE/OPTIONS routes, tracked
+separately.
 
 **Resolved:**
 * Context API freeze — all v1 Context members implemented
@@ -641,35 +642,55 @@ HEAD support (RFC 9110 §9.3.2, added during the RFC gap analysis):
 interfaces with no behavior; TypeScript already enforces their shape, and
 no concrete regression scenario has come up to justify a smoke test.
 
-### Examples — `examples/`
+### Examples — `examples/` — resolved
 
-* [ ] Extend `examples/02-routing/server.ts` (or add a new numbered example)
-  with a route using multiple `:param` segments in one path, e.g.
-  `/users/:userId/posts/:postId`
-* [ ] Add two overlapping routes (e.g. `/users/new` registered before
-  `/users/:id`) to demonstrate registration-order-wins matching
-* [ ] Add a documented request to an unmatched path so the plain-text 404
-  response is visible, not just success paths
-* [ ] Update the example's header comment to describe the new routes covered
+* [x] Extend `examples/02-routing/server.ts` with a route using multiple
+  `:param` segments in one path — `/users/:userId/posts/:postId`, backed
+  by a real `posts` array (previously `/users/:id/posts` returned a
+  hardcoded empty `posts: []` stub; it now filters the same array)
+* [x] Add two overlapping routes to demonstrate registration-order-wins
+  matching — `/users/me` registered before `/users/:id`, so it isn't
+  swallowed by the param route
+* [x] Add a documented request to an unmatched path so the plain-text 404
+  response is visible, not just success paths — see Test Fixtures below
+* [x] Update the example's header comment to describe the new routes covered
 
-### Test Fixtures — `tests/http/`
+### Test Fixtures — `tests/http/` — resolved
 
-* [ ] Add corresponding `.http` requests for the new example routes
-  (multi-param route, overlapping routes, unmatched path) to
-  `tests/http/empire.http` or a new `tests/http/routing.http`
+* [x] Added `tests/http/routing.http` — one request per route (list,
+  filtered list, single user, the `/users/me` overlap case, create,
+  posts list, single post via multi-param, wrong-postId-for-a-real-user
+  404, unmatched-path 404), plus HEAD auto-dispatch and a 405+Allow
+  request against `/users/1`, even though neither needs a dedicated
+  route to demonstrate
+
+### Tests — `tests/integration/RoutingPatterns.test.ts` — added, not originally scoped
+
+The matching mechanics (multi-param extraction, registration order) were
+already unit-tested in `RouteMatcher.test.ts`/`RouterEdgeCases.test.ts`.
+This adds end-to-end coverage over a real HTTP server with real app-level
+logic on top of that matching, which the lower-level tests don't touch:
+
+* [x] `it('extracts both params from a two-param route over a real request')`
+* [x] `it('lets app logic 404 a postId that doesn't belong to the matched userId')`
+* [x] `it('reaches the literal route instead of being swallowed by the param route')`
 
 ### Verification
 
 * [x] `npx vitest run` — runs directly; see the update in Prerequisites
   above. (This item and the `tsc`/`assert` workaround it replaced both
-  predate Phase 9.3, which now runs the full suite routinely.)
+  predate Phase 9.3, which now runs the full suite routinely.) 157/158
+  passing (1 unrelated manual-only skip, see Phase 9.3).
 * [x] `npx tsc --noEmit` — no type errors, including the two new test
   fixture files
-* [ ] Manually exercise the new example routes with the updated `.http` file
-  — blocked on the Examples section below, not yet done
-* [ ] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.1 fully
-  complete — the unit test half is done; the Examples and Test Fixtures
-  sections below are still open
+* [x] Manually exercised every request in `routing.http` against a live
+  `npx tsx examples/02-routing/server.ts` run — all behaved as documented,
+  including the `/users/me` literal-over-param case, the multi-param
+  lookup, both 404 flavors (app-level vs. routing-level), HEAD, and 405
+* [x] Updated `doc/PROJECT_STATE.md` and this plan to mark Phase 9.1
+  fully complete
+
+**Phase 9.1 is fully complete.**
 
 ---
 
@@ -890,11 +911,15 @@ without losing most of the value of the test.
 
 Phase 9.2 added test coverage for `Context`, `StaticFileHandler`, and
 `Empire`, but writing that coverage surfaced real behavioural bugs, not
-just gaps in what was tested. Two commits captured this: one adding
-`tests/integration/` plus new `tests/unit/` files, each bug pinned down
-with a `FINDING N` comment at the point a test catches it; a second fixing
-the four most severe of the 13 findings. This phase tracks that work
-explicitly, separate from Phase 9.2's coverage-only scope.
+just gaps in what was tested. A commit added `tests/integration/` plus
+new `tests/unit/` files, each bug pinned down with a `FINDING N` comment
+at the point a test catches it, followed by a series of commits fixing
+each finding in turn. This phase tracks that work explicitly, separate
+from Phase 9.2's coverage-only scope.
+
+**All 13 findings are resolved.** Full suite: 158 tests, 157 passing, 1
+skipped (a manual-only test for FINDING 8's `StaticFileHandler` half —
+see its own entry below for why).
 
 ### Resolved
 
@@ -967,22 +992,175 @@ Files: `src/http/Context.ts`
 Tests: `tests/unit/http/ContextBody.test.ts`,
 `tests/integration/RequestBody.test.ts`
 
-### Open — not yet fixed
+**FINDING 5 — Built-in middleware fire-and-forget `next()`**
 
-| # | Finding | File | Test |
-|---|---------|------|------|
-| 2 | Static file path-traversal guard (`startsWith(root)`) admits a sibling directory whose name shares the root's prefix. Not currently exploitable — `URL.pathname` normalises `..` before the handler runs — but it's the only remaining defence if that changes. | `src/static/StaticFileHandler.ts` | `tests/unit/static/StaticFileHandler.test.ts` |
-| 5 | `LoggerMiddleware`/`AuthMiddleware` call `next()` without awaiting or returning it — a downstream rejection becomes an unhandled rejection instead of propagating, and the pipeline "completes" before downstream work finishes. Ships as the README's example middleware. | `src/middleware/LoggerMiddleware.ts`, `src/middleware/AuthMiddleware.ts` | `tests/unit/middleware/BuiltInMiddleware.test.ts` |
-| 7 | `ctx.body()` has no size cap — accumulates without bound instead of rejecting an oversized request with 413. | `src/http/Context.ts` | `tests/unit/http/ContextBody.test.ts`, `tests/integration/RequestBody.test.ts` |
-| 8 | `sendFile()` only resolves its promise on the response's `"finish"` event. If the client disconnects mid-stream, `"finish"` never fires, the promise never settles, and the read stream/file descriptor leaks. | `src/http/Context.ts` (`sendFile()`) | `tests/integration/FileStreaming.test.ts` |
-| 9 | Static files never check `req.method` — a HEAD request gets a full body. `Router.discardBody()` only covers routed requests; static middleware runs before the router ever sees the request. | `src/static/StaticFileHandler.ts` | `tests/unit/static/StaticFileHandler.test.ts` |
-| 10 | Route params are never URL-decoded. `RouteMatcher` matches on the raw `req.url` segments while `Context.path` uses the decoded `URL.pathname` — the two disagree on what the request path actually is. | `src/routing/RouteMatcher.ts` | `tests/unit/routing/RouterEdgeCases.test.ts` |
-| 11 | Route matching is first-registered-wins with no literal-over-parameter precedence — reasonable, but undocumented and easy to get wrong (a `/users/:id` registered before `/users/new` swallows `/users/new`). | `src/routing/Router.ts` | `tests/unit/routing/RouterEdgeCases.test.ts` |
-| 12 | `RouteMatcher` filters empty path segments (`filter(Boolean)`), so `//users//1` matches `/users/:id` — multiple URLs collapse onto one route with no canonical form. | `src/routing/RouteMatcher.ts` | `tests/unit/routing/RouterEdgeCases.test.ts` |
-| 13 | `HttpError` carries only `statusCode` and `message` — no machine-readable `code`/`retryable` hint, and `.name` isn't set, so it serialises as generic `"Error"` instead of `"HttpError"`/`"BadRequestError"`. | `src/errors/HttpError.ts` | `tests/unit/errors/HttpError.test.ts` |
+`LoggerMiddleware`/`AuthMiddleware` called `next()` without awaiting or
+returning it — a downstream rejection became an unhandled rejection
+instead of propagating, and the pipeline "completed" before downstream
+work finished. Shipped as the README's own example middleware.
 
-As of this fix batch: 16 of 128 tests still fail (down from 25 before
-FINDING 1/3/4/6 were fixed), all against the open findings above.
+Fix: `return next();` in both — `next()` already returns a `Promise`, so
+returning it directly forwards it without needing `async`/`await`.
+
+Files: `src/middleware/LoggerMiddleware.ts`, `src/middleware/AuthMiddleware.ts`
+Tests: `tests/unit/middleware/BuiltInMiddleware.test.ts`
+
+**FINDING 2 — Static-file path-traversal guard used a bare `startsWith`**
+
+`isSafe = absolutePath.startsWith(this.root)` admits a sibling directory
+whose name shares the root's prefix as a string (e.g. root `/tmp/x/www`
+vs. sibling `/tmp/x/wwwsecret`). Not exploitable through Empire's own
+pipeline — `Context.path` already normalises `../` (including
+percent-encoded `%2e%2e`) before the handler runs — but it's the only
+remaining defence if that changes, or if `StaticFileHandler` is used
+directly.
+
+Fix: require a path-separator boundary — `absolutePath === this.root ||
+absolutePath.startsWith(this.root + path.sep)`. No test flips red-to-green
+here (all 8 `StaticFileHandler` tests already passed); verified via the
+full suite count staying unchanged, confirming this is additive
+hardening, not a behaviour change.
+
+Files: `src/static/StaticFileHandler.ts`
+Tests: `tests/unit/static/StaticFileHandler.test.ts`
+
+**FINDING 9 — Static files ignored `req.method`, so HEAD got a full body**
+
+`Router.discardBody()` only covers routed requests; static middleware
+runs before the router ever sees the request, so a HEAD request to a
+static file streamed and sent the full body anyway.
+
+Fix: `sendFile()` checks `ctx.method === "HEAD"` after setting
+`Content-Type`/`Content-Length` and ends the response immediately,
+skipping `fs.createReadStream()` entirely rather than opening it and
+discarding the output — the file's contents are never needed for HEAD,
+not just discarded after reading.
+
+Files: `src/static/StaticFileHandler.ts`
+Tests: `tests/unit/static/StaticFileHandler.test.ts`
+
+**FINDING 12 — `RouteMatcher` silently collapsed doubled slashes**
+
+`.filter(Boolean)` after `split("/")` drops every empty segment, not just
+the expected leading one every absolute path has — so `//users//1` and
+`/users/1` produced the identical segment array.
+
+Fix: new `splitRequestSegments()` tolerates exactly one leading slash and
+one optional trailing slash (so `/users/` still equals `/users`), but
+returns `null` — no match — if any other empty segment remains, rather
+than silently dropping it. `routeSegments` (the developer-registered
+pattern) keeps the old lenient filtering; this is specifically about
+untrusted client-supplied request paths.
+
+Files: `src/routing/RouteMatcher.ts`
+Tests: `tests/unit/routing/RouterEdgeCases.test.ts`
+
+**FINDING 10 — Route params were never URL-decoded**
+
+`RouteMatcher` matched on raw, still-percent-encoded request segments,
+while `Context.path` (via `URL.pathname`) doesn't auto-decode either —
+verified directly against Node's actual `URL` behaviour rather than
+trusting the original test comment's claim about it. Params like
+`/users/john%20smith` came back through `ctx.params` still encoded,
+disagreeing with `ctx.path` on what the request path even was.
+
+Fix: `RouteMatcher.match()` decodes each request segment right after
+splitting; `Context.path` decodes `url.pathname` to match. Confirmed
+safe against reopening path traversal — Node's `URL` parser already
+resolves dot-segments (including percent-encoded ones) while building
+`.pathname`, before this decode step ever runs. Added coverage for the
+malformed-percent-encoding edge case this introduces
+(`decodeURIComponent` throws on `"%zz"`): a unit test documenting
+`Router.handle()` has no try/catch of its own around matching, and a new
+`tests/integration/MalformedRequestPath.test.ts` confirming Empire's
+FINDING-3 pipeline-level error handling turns that into a clean 500
+instead of a hang, plus a control case confirming a genuinely unmatched
+path still 404s when no route exists to trigger a decode attempt at all.
+
+Files: `src/routing/RouteMatcher.ts`, `src/http/Context.ts`
+Tests: `tests/unit/routing/RouterEdgeCases.test.ts`,
+`tests/integration/MalformedRequestPath.test.ts`
+
+**FINDING 7 — `ctx.body()` had no size cap**
+
+`body()` accumulated the request stream without bound — a large POST
+could exhaust memory instead of being rejected.
+
+Fix: `readBody()` tracks accumulated size per chunk and throws
+`HttpError(413)` as soon as the limit is crossed, rather than buffering
+the full oversized body first. Defaults to 1MB but is overridable:
+`Context`'s constructor takes an optional 4th `maxBodySize` parameter,
+and `EmpireOptions` gained a matching `maxBodySize?` that `Empire`
+threads through to the `Context` it builds per request.
+
+Files: `src/http/Context.ts`, `src/Empire.ts`
+Tests: `tests/unit/http/ContextBody.test.ts`, `tests/integration/RequestBody.test.ts`
+
+**FINDING 8 — `sendFile()` only settled on `"finish"`, hanging on client abort**
+
+If the client disconnected mid-download, `"finish"` never fired, the
+promise never settled, and the read stream was never destroyed — leaking
+a file descriptor per aborted request. Present in both `Context.ts`
+(`ctx.file()`/`ctx.download()`) and the identical pattern duplicated in
+`StaticFileHandler.ts`.
+
+Fix: both now also listen for `"close"` (which does fire on an aborted
+connection), settling with `resolve()` — not `reject()` — so the awaiting
+handler completes normally instead of hanging, and destroying the
+still-open read stream in a shared cleanup path to stop the descriptor
+leak. Verified against a 24MB file aborted 15ms into the stream: settles
+in ~350ms instead of timing out.
+
+The `Context.ts` half is covered by `tests/integration/FileStreaming.test.ts`
+(observes the awaited handler resolving after abort). The
+`StaticFileHandler.ts` half has no equivalent user-code hook to observe
+from the same way, so `tests/integration/StaticFileStreamingAbort.test.ts`
+instead mocks `fs.createReadStream` to assert the opened stream gets
+destroyed. That test is gated behind `RUN_FLAKY_TESTS=true` and excluded
+from the normal suite: reliable solo and paired with just
+`FileStreaming.test.ts`, but ~40% failure under the full suite's
+parallelism — confirmed via a deliberate revert-and-restore of the fix
+that this genuinely catches the regression when present; the flakiness
+is environment-specific to high concurrency, not a false positive.
+
+Files: `src/http/Context.ts`, `src/static/StaticFileHandler.ts`
+Tests: `tests/integration/FileStreaming.test.ts`,
+`tests/integration/StaticFileStreamingAbort.test.ts` (manual-only)
+
+**FINDING 11 — Route matching is first-registered-wins**
+
+Decided: this stays as-is. Ordering overlapping routes correctly is the
+developer's responsibility, not something Empire resolves automatically
+— no code change. Documented in `README.MD`'s new "Routing" section with
+a concrete unreachable-route example and its fix.
+
+The original test asserted the *rejected* design (literal wins regardless
+of registration order) — it had to change to match the actual decision,
+not to dodge a bug. Replaced with two tests documenting both directions:
+a param route registered first wins even over a more specific literal
+route, and registering the literal route first is what lets it win
+instead. `Router.test.ts`'s existing overlap test already registered the
+literal route first and asserted it wins, so it needed no change.
+
+Files: `README.MD` (docs only)
+Tests: `tests/unit/routing/RouterEdgeCases.test.ts`
+
+**FINDING 13 — `HttpError` had no `code`/`retryable`, and `.name` wasn't set**
+
+Every framework error (including `BadRequestError`) serialised as the
+generic `"Error"` instead of its actual class name, and there was nowhere
+to attach a machine-readable error code.
+
+Fix: new `src/errors/HttpErrorOptions.ts` (`{ code?, retryable? }`),
+following this codebase's one-type-per-file convention, threaded through
+`HttpError`'s constructor as an optional 3rd argument — every existing
+two-argument call site keeps working unchanged. `this.name =
+this.constructor.name` covers `BadRequestError` for free, resolving to
+the actual subclass at runtime with no change needed to
+`BadRequestError.ts`.
+
+Files: `src/errors/HttpError.ts`, `src/errors/HttpErrorOptions.ts`
+Tests: `tests/unit/errors/HttpError.test.ts`
 
 ---
 
