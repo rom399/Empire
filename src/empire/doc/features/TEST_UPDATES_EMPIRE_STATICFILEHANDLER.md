@@ -110,19 +110,28 @@ Verified: `tsc --noEmit` clean, 14/14 tests in `Empire.test.ts` passing in
 210ms (down from 6234ms), full suite 178-179/180 depending on the
 pre-existing `FileStreaming.test.ts` flake above.
 
-## Step 3 — `StaticFileHandler.test.ts`: basic resolution
+## Step 3 — `StaticFileHandler.test.ts`: basic resolution ✅
 
-- [ ] New `describe("basic resolution")` block, using the existing
+- [x] New `describe("basic resolution")` block, using the existing
   `root`/`contextFor()` fixture already in this file — no new fixture
   setup needed for most of these
-- [ ] `it('serves a file that exists at the request path')`
-- [ ] `it('sets the correct Content-Type from the file extension')` — add
-  a second fixture file with a non-`.html` extension (e.g. `style.css`)
+- [x] `it('serves a file that exists at the request path')`
+- [x] `it('sets the correct Content-Type from the file extension')` — added
+  a second fixture file with a non-`.html` extension (`style.css`)
   so this genuinely proves extension-based MIME detection, not just that
   `index.html` happens to already be tested elsewhere
-- [ ] `it('sets Content-Length to the file size')` — assert against
+- [x] `it('sets Content-Length to the file size')` — asserts against
   `fs.statSync(...).size`, same pattern the existing HEAD tests already use
-- [ ] `it('returns false when the file does not exist, so the middleware chain continues')`
+- [x] `it('returns false when the file does not exist, so the middleware chain continues')`
+
+Placed as the first `describe` block in the file (before "path traversal
+guard"), since it covers the handler's baseline behavior. `style.css`
+fixture added alongside `index.html` in the shared `beforeAll`.
+
+Verified: `tsc --noEmit` clean, 12/12 tests in this file passing (57ms).
+Full suite: 182 passed, 1 pre-existing flake in
+`tests/integration/FileStreaming.test.ts` (untouched by this step —
+re-ran in isolation, passed), 1 skipped (manual-only flaky test).
 
 ## Step 4 — `StaticFileHandler.test.ts`: directory index fallback
 
