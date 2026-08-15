@@ -2,16 +2,49 @@
 
 ## Current Version
 
-**0.11.0 — Routing Unit Test Coverage**
+**0.12.0 — Critical Bug Fixes (Regression Test Suite)**
 
 ---
 
 ## v1.0.0 Blockers
 
 **None remaining.** Every Priority item in PLAN.md is resolved. What's left
-before an actual v1.0.0 tag is routing/static test coverage (Phase 9.1) and
-the remaining HTTP verbs (Phase 3) — tracked as normal roadmap work, not
-release blockers.
+before an actual v1.0.0 tag is routing/static test coverage (Phase 9.1),
+the 9 open bug-hunt findings (Phase 9.3, below), and the remaining HTTP
+verbs (Phase 3) — tracked as normal roadmap work, not release blockers.
+
+---
+
+## Bug Hunt — Regression Test Suite (FINDING 1–13)
+
+Writing test coverage for `Context`, `Router`, `StaticFileHandler`, and
+`Empire` (Phase 9.2) surfaced 13 real behavioural bugs, each pinned down
+with a `FINDING N` comment in the test that catches it
+(`tests/integration/`, plus new files under `tests/unit/`). Full detail —
+root cause, fix, files touched — is in PLAN.md Phase 9.3. Summary:
+
+**Fixed (4):**
+- FINDING 1 — middleware and route handlers saw two different `Context`
+  instances; state attached by middleware was silently lost
+- FINDING 3 — a throwing middleware had no error handling, leaving the
+  connection hanging instead of returning a response
+- FINDING 4 — calling `next()` twice re-dispatched the router against an
+  already-sent response instead of erroring
+- FINDING 6 — `ctx.body()` re-read the request stream on every call
+  instead of caching it, so a second read (e.g. by middleware, then the
+  handler) silently returned `""`
+
+**Open (9):** FINDING 2 (static-file path-traversal boundary — defence in
+depth, not currently exploitable), 5 (built-in middleware don't
+await/return `next()`), 7 (no request body size limit), 8 (`sendFile()`
+hangs if the client aborts mid-stream), 9 (HEAD requests to static files
+get a full body), 10 (route params not URL-decoded), 11 (no
+literal-over-parameter route precedence), 12 (empty path segments like
+`//users//1` incorrectly match), 13 (`HttpError` has no `code`/`retryable`
+and doesn't set `.name`).
+
+Current test status: **16 of 128 tests fail**, all against the 9 open
+findings above — run `npm test` to see them.
 
 Resolved:
 - ~~0 — Context API freeze~~ — all v1 Context members implemented
@@ -147,12 +180,10 @@ Post-v1 only (requires DI):
   `setFallback()`
 - `Route.test.ts` / `RouteMatch.test.ts` — deliberately skipped, plain
   interfaces with no behavior
-- **Not yet run with real Vitest** — `npm install` is unavailable in the
-  current dev sandbox (npm registry returns 403). All 20 test cases were
-  verified by compiling the real source with `tsc` and re-running
-  equivalent assertions through Node's built-in `assert` module — all
-  passed. The Vitest files are ready to run as-is once installed on a
-  machine with normal registry access.
+- Runs directly via `npm test` / `npx vitest run` — the earlier sandbox
+  restriction on `npm install` no longer applies. (These 20 cases, plus
+  everything added since in Phase 9.2 and 9.3, run as part of the same
+  128-test suite.)
 - Still open: the Examples/Test Fixtures items in PLAN.md Phase 9.1 (a
   multi-param route example, an overlapping-route example, and
   corresponding `.http` requests) — not part of unit test coverage, not
@@ -163,13 +194,12 @@ Post-v1 only (requires DI):
 ## What Is Incomplete
 
 No v1.0.0 blockers remain. Outstanding roadmap work not gating v1.0.0:
-- Phase 3 — PUT/PATCH/DELETE/OPTIONS/HEAD routes, route groups, wildcards
+- Phase 3 — PUT/PATCH/DELETE/OPTIONS routes (HEAD is done), route groups,
+  wildcards
 - Phase 9.1 — routing example additions (multi-param, overlapping routes)
-  and their `.http` requests; running the test suite for real once
-  `vitest` can be installed
-- No test coverage yet for `src/static/` (prefix mounting, streaming, SPA
-  fallback) — not scoped in detail anywhere, only a placeholder
-  `tests/unit/static/` directory exists
+  and their `.http` requests
+- Phase 9.3 — 9 open bug-hunt findings; see "Bug Hunt" above and PLAN.md
+  Phase 9.3 for full detail on each
 
 ---
 

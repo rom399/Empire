@@ -7,7 +7,7 @@ built-in `http` module. It has no runtime dependencies. The design is inspired b
 ASP.NET Core — middleware pipelines, dependency injection, strongly-typed context,
 and a clean separation of concerns.
 
-Current version: **0.10.0 — React Application Support Complete**. See
+Current version: **0.12.0 — Critical Bug Fixes (Regression Test Suite)**. See
 `doc/PROJECT_STATE.md` for the up-to-date status and `PLAN.md` for the full
 phase-by-phase roadmap. No v1.0.0 blockers remain.
 
@@ -62,16 +62,24 @@ empire/
 │   └── Empire.ts                   # Main framework class — server lifecycle, middleware, delegates routing to Router
 │
 ├── tests/
-│   ├── unit/                       # Vitest unit tests (not yet written — no test runner installed)
+│   ├── unit/                       # Vitest unit tests — run via `npm test`
+│   │   ├── routing/                # Router, RouteMatcher, RouterEdgeCases (FINDING 10-12)
+│   │   ├── http/                   # Context, ContextBody (FINDING 6-7)
+│   │   ├── errors/                 # HttpError (FINDING 13)
+│   │   ├── static/                 # StaticFileHandler (FINDING 2, 9)
 │   │   ├── logging/
-│   │   ├── middleware/
-│   │   ├── static/
-│   │   └── di/
+│   │   ├── middleware/             # BuiltInMiddleware (FINDING 5)
+│   │   └── di/                     # placeholder, Phase 10
+│   ├── integration/                # Real-server tests: ContextSharing, MiddlewarePipeline,
+│   │                                # RequestBody, FileStreaming (FINDING 1, 3, 4, 6-8) — see
+│   │                                # PLAN.md Phase 9.3
 │   ├── http/
 │   │   ├── empire.http             # REST client tests
 │   │   └── invalid-json.http
 │   └── fixtures/
-│       └── static/                 # Static file test assets
+│       ├── static/                 # Static file test assets
+│       ├── services/                # TestLogger.ts — in-memory ILogger for tests
+│       └── http/                    # MockHttp.ts — IncomingMessage/ServerResponse stand-ins
 │
 ├── examples/
 │   ├── basic-server/               # Original dev server
@@ -92,9 +100,9 @@ empire/
 └── tsconfig.json
 ```
 
-Note: `tests/unit/routing/` and `tests/fixtures/services/` (a `TestLogger` fixture)
-do not exist yet — see PLAN.md Phase 9.1 for the routing test/example coverage
-still needed.
+Note: the routing example additions and their `.http` requests from PLAN.md
+Phase 9.1 (multi-param route, overlapping routes) are still open — only the
+unit test coverage in that phase is done.
 
 ---
 
@@ -110,8 +118,13 @@ Empire.handleRequest()
     │
     ▼
 Middleware Pipeline (app.use() — runs in registration order)
-    │   Each middleware calls next() to continue the chain.
-    │   If a middleware does not call next(), the pipeline stops.
+    │   Each middleware gets its own one-shot next() to continue the
+    │   chain — calling it twice throws "next() called multiple times"
+    │   rather than silently re-dispatching. If a middleware does not
+    │   call next(), the pipeline stops. A throwing middleware is caught
+    │   by the same try/catch Router uses for route handlers, mapping
+    │   HttpError to its status and anything else to 500, instead of
+    │   leaving the connection hanging.
     │   useStaticFiles() registers itself here too — each mounted
     │   folder is its own middleware, falling through when its
     │   prefix (if any) doesn't match or the file isn't found.
@@ -121,7 +134,8 @@ Router.handle()
     │
     ├─ Matches method and path segments against registered routes (via RouteMatcher)
     ├─ Extracts :param values into ctx.params
-    ├─ Creates a Context for the matched route
+    ├─ Reuses the Context Empire built for the middleware chain — the same
+    │  instance middleware saw, so anything attached to it survives
     ├─ Calls route.handler(ctx)
     │
     ├─ If handler throws HttpError → returns statusCode + message as JSON
@@ -179,7 +193,7 @@ new Router(logger: ILogger)
 | `get(path, handler)` | Registers a handler for GET requests |
 | `post(path, handler)` | Registers a handler for POST requests |
 | `setFallback(handler)` | Registers a handler invoked instead of the plain-text 404 when no route matches a **GET** request — see "SPA / React Router Fallback" below. Only one fallback can be registered; a later call replaces the previous one |
-| `handle(req, res)` | Matches the request against registered routes (first match wins) and invokes the handler, converting thrown errors into the correct response. Falls back to the registered fallback (GET only), or 404, when nothing matches |
+| `handle(req, res, ctx?)` | Matches the request against registered routes (first match wins) and invokes the handler, converting thrown errors into the correct response. Falls back to the registered fallback (GET only), or 404, when nothing matches. `ctx` is optional — when `Empire` supplies the `Context` it already built for the middleware chain, `handle()` reuses that exact instance (attaching matched params to it) instead of constructing a new one, so state middleware attached to `ctx` survives into the route handler. Omitting it (as every direct test call does) preserves the old behaviour of building a fresh `Context` internally |
 
 Uses a `RouteMatcher` internally for path/segment comparison. Route and
 fallback dispatch share error handling via a private `invokeHandler()`, so
@@ -245,7 +259,7 @@ Phase 10 (Dependency Injection) is complete.
 | Member | Description |
 |--------|-------------|
 | `accepts(type)` | Checks whether the client accepts the given response type, honouring `*/*` and `text/*`-style wildcards |
-| `body()` | Reads full request body as string |
+| `body()` | Reads full request body as string. Memoizes the read the first time it's called — a real `IncomingMessage` stream can only be consumed once, so repeat calls (including from `jsonBody()`/`form()`) return the same cached result instead of re-reading and getting `""` |
 | `jsonBody()` | Parses JSON body — throws `BadRequestError` on invalid JSON |
 | `form()` | Parses `application/x-www-form-urlencoded` body into `URLSearchParams` — throws `BadRequestError` on Content-Type mismatch |
 
@@ -531,9 +545,17 @@ interface EmpireOptions {
 
 | Issue | Impact | Plan |
 |-------|--------|------|
-| No automated tests for `src/routing/` or the static file features (prefix mounting, streaming, SPA fallback) | Regressions in routing/static behaviour would go unnoticed | Vitest not yet installed; see PLAN.md Phase 9.1 (routing tests scoped in detail; static file tests not yet scoped — only a placeholder `tests/unit/static/` directory exists) |
-| Only `GET` and `POST` implemented | Can't build a full REST API yet | `PUT`/`PATCH`/`DELETE`/`OPTIONS`/`HEAD` — PLAN.md Phase 3 Remaining |
+| Only `GET` and `POST` (and `HEAD`, auto-dispatched) implemented | Can't build a full REST API yet | `PUT`/`PATCH`/`DELETE`/`OPTIONS` — PLAN.md Phase 3 Remaining |
 | Only one SPA fallback per server | Can't serve two different single-page apps from one `Empire` instance | Not currently needed; `Router.setFallback()` would need to become a list with its own matching logic if this comes up |
+| `LoggerMiddleware`/`AuthMiddleware` call `next()` without awaiting or returning it (FINDING 5) | A downstream rejection becomes an unhandled rejection instead of propagating; these ship as the README's example middleware | PLAN.md Phase 9.3 |
+| `ctx.body()` has no size cap (FINDING 7) | A large request body is buffered fully into memory instead of being rejected with 413 | PLAN.md Phase 9.3 |
+| `sendFile()` only resolves on the response's `"finish"` event (FINDING 8) | A client aborting mid-download leaves the promise unsettled and leaks the read stream/file descriptor | PLAN.md Phase 9.3 |
+| Static files never check `req.method` (FINDING 9) | A HEAD request to a static file gets a full body — `Router.discardBody()` only covers routed requests | PLAN.md Phase 9.3 |
+| Route params are never URL-decoded (FINDING 10) | `RouteMatcher` (raw `req.url`) and `Context.path` (decoded `URL.pathname`) disagree on the request path | PLAN.md Phase 9.3 |
+| No literal-over-parameter route precedence (FINDING 11) | First-registered-wins is undocumented and easy to get wrong, e.g. `/users/:id` registered before `/users/new` swallows it | PLAN.md Phase 9.3 |
+| `RouteMatcher` filters empty path segments (FINDING 12) | `//users//1` matches `/users/:id` — no canonical URL form | PLAN.md Phase 9.3 |
+| `HttpError` has no `code`/`retryable`, and `.name` isn't set (FINDING 13) | Serialises as generic `"Error"`; no machine-readable error code to key off of | PLAN.md Phase 9.3 |
+| Static file path-traversal guard is a bare `startsWith(root)` (FINDING 2) | Admits a sibling directory whose name shares the root's prefix. Not currently exploitable — `URL.pathname` normalises `..` first — but it's the only remaining defence if that changes | PLAN.md Phase 9.3 |
 
 **Resolved** (kept here for history — see `doc/PROJECT_STATE.md` for current status):
 - ~~Routing lived in `Empire.ts`~~ — extracted to `src/routing/Router.ts`
@@ -542,3 +564,8 @@ interface EmpireOptions {
 - ~~Static files read fully into memory~~ — `StaticFileHandler.sendFile()` streams via `fs.createReadStream()`
 - ~~No index.html or React Router fallback~~ — directory index fallback in `StaticFileHandler`, SPA fallback via `Router.setFallback()`, see "SPA / React Router Fallback" above
 - ~~`MimeTypes` missing `.map`, `.ttf`, `.eot`~~ — added, full React/Vite build output coverage
+- ~~No automated tests for `src/routing/` or the static file features~~ — `tests/unit/routing/`, `tests/unit/static/`, and `tests/integration/` all exist and run via `npm test`
+- ~~Context identity split between middleware and route handlers (FINDING 1)~~ — `Router.handle()` now reuses the shared `Context`, see PLAN.md Phase 9.3
+- ~~No error handling around the middleware pipeline (FINDING 3)~~ — `Empire.handleRequest()` now catches and maps errors, see PLAN.md Phase 9.3
+- ~~`next()` not guarded against double invocation (FINDING 4)~~ — recursive `dispatch()` with a one-shot `next()`, see PLAN.md Phase 9.3
+- ~~`ctx.body()` not cached (FINDING 6)~~ — memoized as a promise, see PLAN.md Phase 9.3

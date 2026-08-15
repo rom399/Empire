@@ -20,11 +20,12 @@ Empire should eventually support:
 
 ## Current Version
 
-0.11.0 — Routing Unit Test Coverage
+0.12.0 — Critical Bug Fixes (Regression Test Suite)
 
 **v1.0.0 blockers:** none. All Priority items are resolved — see below.
 Remaining work before an actual v1.0.0 tag is Phase 9.1 (routing/static
-test coverage) and Phase 3's PUT/PATCH/DELETE routes, tracked separately.
+test coverage), Phase 9.3 (9 open bug-hunt findings, below), and Phase 3's
+PUT/PATCH/DELETE routes, tracked separately.
 
 **Resolved:**
 * Context API freeze — all v1 Context members implemented
@@ -577,7 +578,13 @@ will sit on top of `Router` and needs a tested foundation underneath it.
   request/response objects. Not in the original prerequisites list —
   added once writing `Router.test.ts` made the gap obvious.
 
-**Note on the dev environment:** `npm install` is not available in the
+**Update:** the `npm install` sandbox restriction noted below no longer
+applies — `vitest` is installed (`^2.1.0`) and `npm test` / `npx vitest run`
+both run the full suite directly. The `tsc`/`assert` verification described
+below was the workaround used before that access existed; it's kept here
+for history.
+
+~~**Note on the dev environment:** `npm install` is not available in the
 current sandbox (the npm registry returns 403 here), so `vitest` could not
 actually be installed or run to execute these tests in this environment.
 The test files below are written in full Vitest syntax and are ready to
@@ -585,7 +592,7 @@ run with `npm test` once `npm install` succeeds on a machine with normal
 registry access. In the meantime, every case was verified by compiling the
 real `Router`/`RouteMatcher` source with `tsc` and re-running the same
 assertions through Node's built-in `assert` module directly against the
-compiled output — all 20 checks (7 `RouteMatcher` + 13 `Router`) passed.
+compiled output — all 20 checks (7 `RouteMatcher` + 13 `Router`) passed.~~
 
 ### Unit Tests — `tests/unit/routing/` — resolved
 
@@ -653,10 +660,9 @@ no concrete regression scenario has come up to justify a smoke test.
 
 ### Verification
 
-* [ ] `npx vitest run` — not run in this sandbox (npm install unavailable);
-  ready to run once `vitest` can actually be installed. All logic verified
-  by an equivalent Node `assert`-based run against the compiled source
-  instead — see the note in Prerequisites above.
+* [x] `npx vitest run` — runs directly; see the update in Prerequisites
+  above. (This item and the `tsc`/`assert` workaround it replaced both
+  predate Phase 9.3, which now runs the full suite routinely.)
 * [x] `npx tsc --noEmit` — no type errors, including the two new test
   fixture files
 * [ ] Manually exercise the new example routes with the updated `.http` file
@@ -877,6 +883,106 @@ without losing most of the value of the test.
   succeeding wherever this runs
 * [ ] `npx tsc --noEmit` — no type errors
 * [ ] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.2 complete
+
+---
+
+## Phase 9.3 — Critical Bug Fixes (from Regression Test Suite)
+
+Phase 9.2 added test coverage for `Context`, `StaticFileHandler`, and
+`Empire`, but writing that coverage surfaced real behavioural bugs, not
+just gaps in what was tested. Two commits captured this: one adding
+`tests/integration/` plus new `tests/unit/` files, each bug pinned down
+with a `FINDING N` comment at the point a test catches it; a second fixing
+the four most severe of the 13 findings. This phase tracks that work
+explicitly, separate from Phase 9.2's coverage-only scope.
+
+### Resolved
+
+**FINDING 1 — Context identity split between middleware and route handlers**
+
+`Empire.handleRequest()` built a `Context` for the middleware chain, then
+`Router.handle()` built a *second*, different `Context` for the route
+handler — anything a middleware attached to `ctx` (auth info, parsed
+state) was silently discarded before the handler ran.
+
+Fix: `Context.params` is no longer `readonly`. `Router.handle()` gained an
+optional third parameter, `ctx?: Context` — when supplied, it's reused
+instead of constructing a new one, with the matched route params attached
+to it after matching (`requestCtx.params = match.params`). `Empire.ts`
+passes its middleware-chain `ctx` through. The parameter is optional
+specifically so `Router.handle(req, res)` keeps working unchanged for the
+~20 existing test call sites that invoke it directly without a `Context`.
+
+Files: `src/http/Context.ts`, `src/routing/Router.ts`, `src/Empire.ts`
+Tests: `tests/integration/ContextSharing.test.ts`
+
+**FINDING 3 — No error handling around the middleware pipeline**
+
+`Router.invokeHandler()` catches errors thrown from route handlers and
+maps them to a response, but `Empire.handleRequest()` had no equivalent
+around the middleware chain. A throwing middleware produced an unhandled
+promise rejection and left the connection hanging — the client never got
+a response, and the request just timed out.
+
+Fix: `handleRequest()` wraps its dispatch call in the same try/catch
+pattern `Router.invokeHandler()` already uses — `HttpError` maps to its
+`statusCode`, anything else maps to 500, both as a JSON body, guarded by
+`res.headersSent` so a response already sent is never double-written.
+
+Files: `src/Empire.ts`
+Tests: `tests/integration/MiddlewarePipeline.test.ts`
+
+**FINDING 4 — `next()` not guarded against being called twice**
+
+The middleware pipeline used one `index` variable shared across every
+middleware's `next()` closure. Calling `next()` twice from the same
+middleware didn't error — it silently advanced `index` past the end of
+the chain and re-invoked `Router.handle()` a second time against a
+response that may already have been sent.
+
+Fix: replaced the shared counter with recursive `dispatch(index)`, giving
+each middleware its own one-shot `next()` (the standard Koa `compose()`
+pattern) that throws `"next() called multiple times"` on a second call
+instead of re-running downstream work.
+
+Files: `src/Empire.ts`
+Tests: `tests/integration/MiddlewarePipeline.test.ts` (`'throws if a
+middleware calls next() more than once'`)
+
+**FINDING 6 — `ctx.body()` not cached**
+
+`body()` read `this.req` directly on every call with no memoization. A
+real `http.IncomingMessage` is a stream — it can only be consumed once —
+so a second call, or a middleware reading the body before the handler
+does, got back `""`. `jsonBody()` then reported a misleading `400 Invalid
+JSON` for a request whose body had been perfectly valid JSON.
+
+Fix: `body()` now memoizes the *promise* (not just the resolved value, so
+two calls in the same tick don't race to read the stream twice) in a new
+private `bodyPromise` field, delegating the actual read to a renamed
+private `readBody()`. `jsonBody()` and `form()` needed no changes — both
+already call `body()`, so they're fixed as a side effect.
+
+Files: `src/http/Context.ts`
+Tests: `tests/unit/http/ContextBody.test.ts`,
+`tests/integration/RequestBody.test.ts`
+
+### Open — not yet fixed
+
+| # | Finding | File | Test |
+|---|---------|------|------|
+| 2 | Static file path-traversal guard (`startsWith(root)`) admits a sibling directory whose name shares the root's prefix. Not currently exploitable — `URL.pathname` normalises `..` before the handler runs — but it's the only remaining defence if that changes. | `src/static/StaticFileHandler.ts` | `tests/unit/static/StaticFileHandler.test.ts` |
+| 5 | `LoggerMiddleware`/`AuthMiddleware` call `next()` without awaiting or returning it — a downstream rejection becomes an unhandled rejection instead of propagating, and the pipeline "completes" before downstream work finishes. Ships as the README's example middleware. | `src/middleware/LoggerMiddleware.ts`, `src/middleware/AuthMiddleware.ts` | `tests/unit/middleware/BuiltInMiddleware.test.ts` |
+| 7 | `ctx.body()` has no size cap — accumulates without bound instead of rejecting an oversized request with 413. | `src/http/Context.ts` | `tests/unit/http/ContextBody.test.ts`, `tests/integration/RequestBody.test.ts` |
+| 8 | `sendFile()` only resolves its promise on the response's `"finish"` event. If the client disconnects mid-stream, `"finish"` never fires, the promise never settles, and the read stream/file descriptor leaks. | `src/http/Context.ts` (`sendFile()`) | `tests/integration/FileStreaming.test.ts` |
+| 9 | Static files never check `req.method` — a HEAD request gets a full body. `Router.discardBody()` only covers routed requests; static middleware runs before the router ever sees the request. | `src/static/StaticFileHandler.ts` | `tests/unit/static/StaticFileHandler.test.ts` |
+| 10 | Route params are never URL-decoded. `RouteMatcher` matches on the raw `req.url` segments while `Context.path` uses the decoded `URL.pathname` — the two disagree on what the request path actually is. | `src/routing/RouteMatcher.ts` | `tests/unit/routing/RouterEdgeCases.test.ts` |
+| 11 | Route matching is first-registered-wins with no literal-over-parameter precedence — reasonable, but undocumented and easy to get wrong (a `/users/:id` registered before `/users/new` swallows `/users/new`). | `src/routing/Router.ts` | `tests/unit/routing/RouterEdgeCases.test.ts` |
+| 12 | `RouteMatcher` filters empty path segments (`filter(Boolean)`), so `//users//1` matches `/users/:id` — multiple URLs collapse onto one route with no canonical form. | `src/routing/RouteMatcher.ts` | `tests/unit/routing/RouterEdgeCases.test.ts` |
+| 13 | `HttpError` carries only `statusCode` and `message` — no machine-readable `code`/`retryable` hint, and `.name` isn't set, so it serialises as generic `"Error"` instead of `"HttpError"`/`"BadRequestError"`. | `src/errors/HttpError.ts` | `tests/unit/errors/HttpError.test.ts` |
+
+As of this fix batch: 16 of 128 tests still fail (down from 25 before
+FINDING 1/3/4/6 were fixed), all against the open findings above.
 
 ---
 
