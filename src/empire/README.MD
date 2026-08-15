@@ -1,5 +1,7 @@
 # Empire
 
+[![CI](https://github.com/rom399/Empire/actions/workflows/ci.yml/badge.svg)](https://github.com/rom399/Empire/actions/workflows/ci.yml)
+
 Empire is a lightweight TypeScript web framework built from scratch using Node.js.
 
 The goal of the project is to understand how modern web frameworks such as Express, Koa, Fastify, and ASP.NET Core work internally by implementing the core features ourselves.

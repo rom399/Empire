@@ -101,6 +101,14 @@ empire/
 └── tsconfig.json
 ```
 
+CI (`.github/workflows/ci.yml`) and Dependabot (`.github/dependabot.yml`)
+config live at the git repo root (`D:/dev/ROM/.github/`), one level above
+`empire/` — not shown in the tree above since it sits outside the project
+root this document describes. CI runs `npm ci`, `tsc --noEmit`, and
+`vitest run` (scoped to `src/empire`) on every push to `main` and every
+pull request; Dependabot opens weekly update PRs for npm dependencies and
+for the Actions versions the workflow pins.
+
 Note: the routing example additions and their `.http` requests from PLAN.md
 Phase 9.1 (multi-param route, overlapping routes) are still open — only the
 unit test coverage in that phase is done.

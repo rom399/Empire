@@ -181,6 +181,10 @@ Post-v1 only (requires DI):
 - `npm start` script
 - `.npmignore`
 - REST client test files
+- GitHub Actions CI (`.github/workflows/ci.yml`) — `npm ci`, `tsc --noEmit`,
+  `vitest run` on every push to `main` and every PR
+- Dependabot (`.github/dependabot.yml`) — weekly npm and GitHub Actions
+  update PRs
 
 ### Phase 9 — Project Structure ✅
 - Project renamed to `empire`
@@ -266,6 +270,9 @@ Files to create in `src/di/`:
 
 ```
 D:/dev/ROM/
+├── .github/
+│   ├── workflows/ci.yml ← CI: npm ci, tsc --noEmit, vitest run
+│   └── dependabot.yml   ← weekly npm + GitHub Actions update PRs
 └── src/
     └── empire/          ← project root
         ├── src/         ← framework source
