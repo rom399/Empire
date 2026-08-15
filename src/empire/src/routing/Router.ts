@@ -43,6 +43,40 @@ export class Router {
     }
 
     /**
+     * Registers a handler for PUT requests to the given path.
+     */
+    public put(path: string, handler: RouteHandler): void {
+        this.addRoute("PUT", path, handler);
+    }
+
+    /**
+     * Registers a handler for PATCH requests to the given path.
+     */
+    public patch(path: string, handler: RouteHandler): void {
+        this.addRoute("PATCH", path, handler);
+    }
+
+    /**
+     * Registers a handler for DELETE requests to the given path.
+     */
+    public delete(path: string, handler: RouteHandler): void {
+        this.addRoute("DELETE", path, handler);
+    }
+
+    /**
+     * Registers a handler for OPTIONS requests to the given path. Optional —
+     * any path with at least one other registered method already answers
+     * OPTIONS automatically with a 204 and an Allow header listing what's
+     * available there (RFC 9110 §9.3.7); register a handler here only when
+     * you need custom behavior (e.g. CORS preflight headers) instead of the
+     * automatic response. An explicit handler always takes priority over
+     * the automatic one.
+     */
+    public options(path: string, handler: RouteHandler): void {
+        this.addRoute("OPTIONS", path, handler);
+    }
+
+    /**
      * Registers a handler invoked when no route matches a GET request,
      * in place of the default plain-text 404. Used for single-page-app
      * support, where an unmatched path (e.g. a React Router route) should
@@ -67,12 +101,16 @@ export class Router {
      * invokes the first matching handler. HEAD requests are matched
      * against GET routes and dispatched to the same handler, with the
      * response body discarded before it reaches the client (RFC 9110
-     * §9.3.2). Falls back to the registered fallback handler (GET
-     * requests only), a 405 when the path matches a route registered
-     * under a different method (RFC 9110 §9.2.2 — a matched resource
-     * that doesn't support the request method must respond 405 with an
-     * Allow header, not 404), or a 404 when nothing matches the path at
-     * all.
+     * §9.3.2). An OPTIONS request matches an explicitly registered
+     * OPTIONS handler exactly like any other method; if none is
+     * registered for the path but other methods are, it instead gets an
+     * automatic 204 with an Allow header (RFC 9110 §9.3.7) rather than
+     * falling into the 405 case below. Otherwise falls back to the
+     * registered fallback handler (GET requests only), a 405 when the
+     * path matches a route registered under a different method (RFC 9110
+     * §9.2.2 — a matched resource that doesn't support the request
+     * method must respond 405 with an Allow header, not 404), or a 404
+     * when nothing matches the path at all.
      */
     public async handle(
         req: http.IncomingMessage,
@@ -116,6 +154,20 @@ export class Router {
         }
 
         if (allowedMethods.size > 0) {
+
+            // OPTIONS is implicitly supported wherever any other method is
+            // registered, even without an explicit handler — RFC 9110
+            // §9.3.7 — so it belongs in Allow the same way HEAD does above.
+            allowedMethods.add("OPTIONS");
+
+            if (req.method === "OPTIONS") {
+                res.statusCode = 204;
+                res.setHeader("Allow", Array.from(allowedMethods).join(", "));
+                res.end();
+
+                return;
+            }
+
             res.statusCode = 405;
             res.setHeader("Allow", Array.from(allowedMethods).join(", "));
             res.end("Method not allowed");

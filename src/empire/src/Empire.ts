@@ -131,6 +131,22 @@ export class Empire {
     this.router.post(path, handler);
   }
 
+  public put(path: string, handler: RouteHandler): void {
+    this.router.put(path, handler);
+  }
+
+  public patch(path: string, handler: RouteHandler): void {
+    this.router.patch(path, handler);
+  }
+
+  public delete(path: string, handler: RouteHandler): void {
+    this.router.delete(path, handler);
+  }
+
+  public options(path: string, handler: RouteHandler): void {
+    this.router.options(path, handler);
+  }
+
   public get logger(): ILogger {
     return this._logger;
   }

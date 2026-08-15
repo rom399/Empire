@@ -4,10 +4,12 @@ import { ConsoleLogger } from "../../src/logging/ConsoleLogger";
 import { TestLogger } from "../fixtures/services/TestLogger";
 
 /**
- * Phase 1 (Foundation) coverage only: server lifecycle and logger
- * injection. Middleware, routing, and static-file dispatch through
- * Empire are covered separately once those sections of Phase 9.2 are
- * written — this file will grow to include them.
+ * Server lifecycle, logger injection (Phase 1), and routing method
+ * delegation (Phase 3 — PUT/PATCH/DELETE registered via Empire reach the
+ * server; GET/POST have no equivalent test here yet, and Router.test.ts
+ * already covers the underlying dispatch logic these thinly wrap).
+ * Middleware and static-file dispatch through Empire are covered
+ * separately once those sections of Phase 9.2 are written.
  */
 describe("Empire", () => {
 
@@ -57,6 +59,41 @@ describe("Empire", () => {
             await first.start();
 
             await expect(second.start()).rejects.toThrow();
+        });
+    });
+
+    describe("routing", () => {
+
+        it("put() registers a route reachable via the server", async () => {
+            const app = createApp(47007);
+            app.put("/users/1", (ctx) => ctx.json({ updated: true }));
+
+            await app.start();
+            const response = await fetch("http://127.0.0.1:47007/users/1", { method: "PUT" });
+
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ updated: true });
+        });
+
+        it("patch() registers a route reachable via the server", async () => {
+            const app = createApp(47008);
+            app.patch("/users/1", (ctx) => ctx.json({ patched: true }));
+
+            await app.start();
+            const response = await fetch("http://127.0.0.1:47008/users/1", { method: "PATCH" });
+
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ patched: true });
+        });
+
+        it("delete() registers a route reachable via the server", async () => {
+            const app = createApp(47009);
+            app.delete("/users/1", (ctx) => ctx.status(204).text(""));
+
+            await app.start();
+            const response = await fetch("http://127.0.0.1:47009/users/1", { method: "DELETE" });
+
+            expect(response.status).toBe(204);
         });
     });
 

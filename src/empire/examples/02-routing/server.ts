@@ -4,17 +4,18 @@
  * Demonstrates Empire's routing capabilities with:
  * - Route parameters via ctx.params, including multiple :params in one path
  * - Query strings via ctx.query
- * - Multiple GET and POST routes
+ * - A full REST-style user API: GET (list/single), POST (create), PUT (full
+ *   replace), PATCH (partial update), DELETE (remove) — see doc/features/
+ *   MISSING_HTTP_VERBS.md for how PUT/PATCH/DELETE/OPTIONS were added
  * - Overlapping routes, registered literal-first so the literal route wins
  *   over a colliding :param route — see the "Routing" section of the README
- * - Realistic REST-style user API using only GET and POST
  *
  * Run: npx tsx examples/02-routing/server.ts
  * Open: http://localhost:8002
  *
  * See tests/http/routing.http for requests covering every route below,
- * plus the unmatched-path 404, HEAD auto-dispatch, and 405 behaviors that
- * don't need any dedicated route to demonstrate.
+ * plus the unmatched-path 404, HEAD/OPTIONS auto-dispatch, and a 405
+ * example, none of which need a dedicated route to demonstrate.
  */
 
 import process from "process";
@@ -76,6 +77,52 @@ app.post("/users", async (ctx) => {
     users.push(newUser);
 
     ctx.status(201).json(newUser);
+});
+
+app.put("/users/:id", async (ctx) => {
+    const index = users.findIndex((u) => u.id === ctx.params.id);
+
+    if (index === -1) {
+        ctx.status(404).json({ error: "User not found" });
+        return;
+    }
+
+    const body = await ctx.jsonBody() as { name: string; role: string };
+
+    // Full replace — every field comes from the request body, nothing
+    // carries over from the existing user except the id from the URL.
+    users[index] = { id: ctx.params.id, name: body.name, role: body.role };
+
+    ctx.json(users[index]);
+});
+
+app.patch("/users/:id", async (ctx) => {
+    const user = users.find((u) => u.id === ctx.params.id);
+
+    if (!user) {
+        ctx.status(404).json({ error: "User not found" });
+        return;
+    }
+
+    // Partial update — only fields present in the body are touched.
+    const body = await ctx.jsonBody() as Partial<{ name: string; role: string }>;
+
+    Object.assign(user, body);
+
+    ctx.json(user);
+});
+
+app.delete("/users/:id", (ctx) => {
+    const index = users.findIndex((u) => u.id === ctx.params.id);
+
+    if (index === -1) {
+        ctx.status(404).json({ error: "User not found" });
+        return;
+    }
+
+    users.splice(index, 1);
+
+    ctx.status(204).text("");
 });
 
 app.get("/users/:id/posts", (ctx) => {
