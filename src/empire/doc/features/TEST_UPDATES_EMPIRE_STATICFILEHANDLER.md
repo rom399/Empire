@@ -152,7 +152,7 @@ Full suite: 186 passed, 1 skipped — clean run, no flake this time
 (`FileStreaming.test.ts`'s abort-mid-stream test is intermittent, not
 consistent; see the pre-existing note above).
 
-## Step 5 — README documentation
+## Step 5 — README documentation ✅
 
 `README.MD` currently has **no "Static Files" section at all** —
 `useStaticFiles()`, prefix mounting, and directory-index fallback are
@@ -161,7 +161,7 @@ user-facing README. This is worth fixing as part of writing tests for
 the same capability, not scope creep — a developer reading the README
 today wouldn't know this feature exists.
 
-- [ ] New "Static Files" section in `README.MD`, placed after "Routing"
+- [x] New "Static Files" section in `README.MD`, placed after "Routing"
   and before "Middleware" (static file serving is middleware-based but
   conceptually closer to routing — it's "what handles a request" like
   routes are)
@@ -172,11 +172,16 @@ today wouldn't know this feature exists.
     `examples/06-react-app` for the full SPA behavior set, rather than
     re-documenting it in two places
   - Pointer to `examples/04-static-files` for a runnable version
-- [ ] Strengthen the existing "Middleware" section: it currently shows
-  registration and a flow diagram but never states that a middleware
-  must call `next()` to continue the chain, or what happens if it
-  doesn't (the exact behavior Step 1 adds a test for) — add a short
-  example showing both cases (calls `next()` vs. doesn't)
+- [x] Strengthened the existing "Middleware" section: it now states that
+  a middleware must call `next()` to continue the chain, and what
+  happens if it doesn't (the exact behavior Step 1's test covers) — added
+  a short example showing both cases (calls `next()` vs. doesn't)
+
+Both example directories referenced (`examples/04-static-files`,
+`examples/06-react-app`) confirmed to exist before linking to them.
+`README.MD`'s "Current Features" bullet list was left untouched — it
+doesn't list routing or HTTP verbs either, so it's already out of scope
+for this step; not the mechanism the doc uses for feature documentation.
 
 ## Step 6 — Final verification
 
