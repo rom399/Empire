@@ -26,8 +26,18 @@ npm install
 
 ## Running
 
+There is no standalone server file in this project; `npm start` runs
+`examples/01-basic-server/server.ts`:
+
 ```bash
-npx tsx server.ts
+npm start
+```
+
+Any other example can be run directly with `tsx`. See the Examples section
+below for what each one demonstrates.
+
+```bash
+npx tsx examples/02-routing/server.ts
 ```
 
 ## Example
@@ -327,6 +337,25 @@ app.post("/upload", async (ctx) => {
 
 See `examples/07-body-size-limit` for a runnable version with a
 deliberately small limit so the 413 response is easy to trigger.
+
+## Examples
+
+Each example is a single, runnable `server.ts`. Run one with `npx tsx`,
+for example:
+
+```bash
+npx tsx examples/02-routing/server.ts
+```
+
+| Example | Port | Shows |
+|---|---|---|
+| `01-basic-server` | 8001 | A minimal server: an HTML route, a JSON health check, and a POST route that echoes its JSON body back |
+| `02-routing` | 8002 | A full REST-style user API: route params, query strings, a multi-param nested route, and a literal route registered ahead of an overlapping param route |
+| `03-middleware` | 8003 | The built-in `LoggerMiddleware` and `AuthMiddleware` plus a custom timing middleware, showing pipeline ordering |
+| `04-static-files` | 8004 | An unprefixed static folder and a second one mounted under a URL prefix, served side by side |
+| `05-error-handling` | 8005 | `HttpError` and `BadRequestError` thrown from route handlers, and an uncaught error on `/crash` becoming a `500` |
+| `06-react-app` | 8006 | A real React + React Router app served with `spaFallback: true`, alongside a real API route that takes priority over the fallback |
+| `07-body-size-limit` | 8007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
 
 ## Project Structure
 
