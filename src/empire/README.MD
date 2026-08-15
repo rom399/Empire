@@ -8,15 +8,15 @@ The goal of the project is to understand how modern web frameworks such as Expre
 
 ## Current Features
 
-* HTTP server built on Node.js
-* Configurable host and port
-* Promise-based startup lifecycle
-* Promise-based shutdown lifecycle
-* Graceful shutdown using SIGINT
-* Middleware registration (`app.use()`)
-* Pluggable logging abstraction (`ILogger`)
-* Built-in console logger with timestamps
-* TypeScript support
+* HTTP server built on Node's `http` module, with configurable host and port
+* Promise-based `start()` and `stop()` lifecycle, `stop()` closing the server gracefully
+* Routing across all six HTTP methods, with `:param` capture and automatic HEAD and OPTIONS handling
+* Middleware pipeline executing in registration order (`app.use()`)
+* Static file serving, with optional URL prefixes and SPA fallback
+* Centralized error handling built around `HttpError`
+* Configurable request body size limit
+* Pluggable logging abstraction (`ILogger`), with a built-in console logger
+* Written in TypeScript throughout
 
 ## Installation
 
