@@ -8,15 +8,15 @@ The goal of the project is to understand how modern web frameworks such as Expre
 
 ## Current Features
 
-* HTTP server built on Node.js
-* Configurable host and port
-* Promise-based startup lifecycle
-* Promise-based shutdown lifecycle
-* Graceful shutdown using SIGINT
-* Middleware registration (`app.use()`)
-* Pluggable logging abstraction (`ILogger`)
-* Built-in console logger with timestamps
-* TypeScript support
+* HTTP server built on Node's `http` module, with configurable host and port
+* Promise-based `start()` and `stop()` lifecycle, `stop()` closing the server gracefully
+* Routing across all six HTTP methods, with `:param` capture and automatic HEAD and OPTIONS handling
+* Middleware pipeline executing in registration order (`app.use()`)
+* Static file serving, with optional URL prefixes and SPA fallback
+* Centralized error handling built around `HttpError`
+* Configurable request body size limit
+* Pluggable logging abstraction (`ILogger`), with a built-in console logger
+* Written in TypeScript throughout
 
 ## Installation
 
@@ -26,8 +26,18 @@ npm install
 
 ## Running
 
+There is no standalone server file in this project; `npm start` runs
+`examples/01-basic-server/server.ts`:
+
 ```bash
-npx tsx server.ts
+npm start
+```
+
+Any other example can be run directly with `tsx`. See the Examples section
+below for what each one demonstrates.
+
+```bash
+npx tsx examples/02-routing/server.ts
 ```
 
 ## Example
@@ -67,7 +77,7 @@ app.get("/users/:userId/posts/:postId", (ctx) => {
 });
 ```
 
-Every HTTP method has a matching registration method — `app.get()`,
+Every HTTP method has a matching registration method - `app.get()`,
 `app.post()`, `app.put()`, `app.patch()`, `app.delete()`, and
 `app.options()`:
 
@@ -87,7 +97,7 @@ app.delete("/users/:id", (ctx) => {
 });
 ```
 
-`HEAD` needs no registration of its own — it's automatically answered
+`HEAD` needs no registration of its own - it's automatically answered
 wherever `GET` is registered, with the body discarded but the same
 headers set.
 
@@ -97,12 +107,12 @@ header listing what's available there. `app.options()` is only needed if
 you want custom behavior instead of that automatic response:
 
 ```ts
-// No app.options("/users/:id", ...) needed — OPTIONS /users/:id already
+// No app.options("/users/:id", ...) needed - OPTIONS /users/:id already
 // responds 204 with Allow: GET, HEAD, PUT, PATCH, DELETE, OPTIONS
 
 app.options("/users", (ctx) => {
-    // Custom behavior overrides the automatic response — e.g. for CORS
-    // preflight — and takes priority whenever it's registered.
+    // Custom behavior overrides the automatic response - e.g. for CORS
+    // preflight - and takes priority whenever it's registered.
     ctx.header("Access-Control-Allow-Methods", "GET, POST").status(204).text("");
 });
 ```
@@ -110,7 +120,7 @@ app.options("/users", (ctx) => {
 See `examples/02-routing` for a runnable version of all of this,
 alongside query strings and a full REST-style user API.
 
-**Routes are matched in registration order, and the first match wins —
+**Routes are matched in registration order, and the first match wins -
 this is the developer's responsibility to get right, not something Empire
 resolves automatically.** If two registered routes could both match the
 same request, whichever was registered first is used, even if the other
@@ -120,7 +130,7 @@ looks like the "more specific" match:
 app.get("/users/:id", (ctx) => ctx.text("param"));
 app.get("/users/new", (ctx) => ctx.text("literal"));
 
-// GET /users/new -> "param" — :id already matched "new" first.
+// GET /users/new -> "param" - :id already matched "new" first.
 // The /users/new route above is unreachable.
 ```
 
@@ -161,12 +171,12 @@ app.useStaticFiles("./storage/uploads", { prefix: "/uploads" });
 ```
 
 If a request path resolves to a directory, an `index.html` inside it is
-served automatically — `/about/` and `/about` (no trailing slash) both
+served automatically - `/about/` and `/about` (no trailing slash) both
 serve `root/about/index.html`. A directory with no `index.html` inside it
 falls through instead of erroring.
 
 Pass `{ spaFallback: true }` to serve `root/index.html` for any unmatched
-`GET` request instead of a `404` — useful for single-page apps using
+`GET` request instead of a `404` - useful for single-page apps using
 client-side routing. See `examples/06-react-app` for the full behavior
 set alongside API routes.
 
@@ -196,7 +206,7 @@ router
 Response
 ```
 
-A middleware must call `next()` to continue the chain — if it doesn't,
+A middleware must call `next()` to continue the chain - if it doesn't,
 the request is left unanswered (no timeout, no automatic error) rather
 than falling through to the next middleware or the router:
 
@@ -209,11 +219,62 @@ app.use(async (ctx, next) => {
 app.use(async (ctx, next) => {
     if (!isAuthenticated(ctx)) {
         ctx.status(401).text("Unauthorized");
-        return; // chain stops here — next() is never called
+        return; // chain stops here - next() is never called
     }
     await next();
 });
 ```
+
+## Error Handling
+
+`HttpError` is the base class for an error that should become a specific
+HTTP response. Throw one from a route handler or a middleware with a status
+code and a message:
+
+```ts
+import { HttpError } from "./src/errors/HttpError";
+
+app.get("/products/:id", (ctx) => {
+    if (!isValidId(ctx.params.id)) {
+        throw new HttpError(404, `Product with id ${ctx.params.id} was not found`);
+    }
+    ctx.json({ id: ctx.params.id });
+});
+```
+
+`BadRequestError(message)` is a shorthand for `new HttpError(400, message)`.
+It is already used internally: `ctx.jsonBody()` throws it on invalid JSON,
+and `ctx.form()` throws it when the Content-Type does not match.
+
+An error thrown inside a route handler (or the SPA fallback handler) is
+caught by `Router`. An error thrown inside a middleware, or by the routing
+step itself before a handler runs, is caught separately by `Empire`'s own
+request handler. Both use the same mapping, so from the client's side the
+response looks identical either way: an `HttpError` becomes its own status
+code with a JSON body, `{ "error": "<message>" }`. Anything else, a plain
+`Error` or any other thrown value, always becomes a `500` with a generic
+body, `{ "error": "Internal Server Error" }` - the real message is never
+sent to the client, only logged server-side via `app.logger.error()`.
+
+```ts
+app.get("/crash", () => {
+    throw new Error("boom"); // -> 500, { "error": "Internal Server Error" }
+});
+```
+
+There is no configurable or replaceable error handler. The mapping described
+above is fixed logic inside `Empire.ts` and `Router.ts` - there is currently
+no hook to register a custom handler or change the response shape.
+
+One sharp edge worth knowing: both catch sites check whether a response has
+already been sent before writing anything. A handler that starts streaming a
+response (for example `ctx.file()`) and then errors partway through will not
+get a conflicting second response written on top of the first - but it also
+will not get a clean error response. The client is left with a truncated
+response and no error body.
+
+See `examples/05-error-handling` for a runnable version of all of the above,
+including the always-500 `/crash` route.
 
 ## Logging
 
@@ -266,7 +327,7 @@ The limit applies to `ctx.body()`, and therefore to `ctx.jsonBody()` and
 
 ```ts
 app.post("/upload", async (ctx) => {
-    // Throws HttpError(413) automatically if the body is too large —
+    // Throws HttpError(413) automatically if the body is too large -
     // no need to check the size yourself.
     const data = await ctx.jsonBody();
 
@@ -277,20 +338,61 @@ app.post("/upload", async (ctx) => {
 See `examples/07-body-size-limit` for a runnable version with a
 deliberately small limit so the 413 response is easy to trigger.
 
+## Examples
+
+Each example is a single, runnable `server.ts`. Run one with `npx tsx`,
+for example:
+
+```bash
+npx tsx examples/02-routing/server.ts
+```
+
+| Example | Port | Shows |
+|---|---|---|
+| `01-basic-server` | 8001 | A minimal server: an HTML route, a JSON health check, and a POST route that echoes its JSON body back |
+| `02-routing` | 8002 | A full REST-style user API: route params, query strings, a multi-param nested route, and a literal route registered ahead of an overlapping param route |
+| `03-middleware` | 8003 | The built-in `LoggerMiddleware` and `AuthMiddleware` plus a custom timing middleware, showing pipeline ordering |
+| `04-static-files` | 8004 | An unprefixed static folder and a second one mounted under a URL prefix, served side by side |
+| `05-error-handling` | 8005 | `HttpError` and `BadRequestError` thrown from route handlers, and an uncaught error on `/crash` becoming a `500` |
+| `06-react-app` | 8006 | A real React + React Router app served with `spaFallback: true`, alongside a real API route that takes priority over the fallback |
+| `07-body-size-limit` | 8007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
+
 ## Project Structure
 
 ```text
-rom-server/
-├── README.md
+empire/
+├── src/
+│   ├── Empire.ts
+│   ├── types.ts
+│   ├── http/          Context, CookieOptions
+│   ├── routing/        Route, RouteMatch, RouteMatcher, Router
+│   ├── middleware/      LoggerMiddleware, AuthMiddleware
+│   ├── static/          MimeTypes, StaticFileHandler and its option types
+│   ├── errors/          HttpError, BadRequestError, HttpErrorOptions
+│   ├── logging/         ILogger, ConsoleLogger
+│   └── di/              empty, Phase 10 placeholder
+├── examples/
+│   ├── 01-basic-server/
+│   ├── 02-routing/
+│   ├── 03-middleware/
+│   ├── 04-static-files/
+│   ├── 05-error-handling/
+│   ├── 06-react-app/
+│   └── 07-body-size-limit/
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   ├── http/
+│   └── fixtures/
+├── doc/
+│   ├── ARCHITECTURE.md
+│   ├── PROJECT_STATE.md
+│   └── features/
+├── README.MD
 ├── PLAN.md
+├── CONTRIBUTING.md
 ├── package.json
-├── tsconfig.json
-├── server.ts
-└── src/
-    ├── Empire.ts
-    ├── types.ts
-    ├── middleware/
-    └── logging/
+└── tsconfig.json
 ```
 
 ## Motivation
