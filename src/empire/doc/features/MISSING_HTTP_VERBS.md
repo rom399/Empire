@@ -99,19 +99,32 @@ a deliberate spec change, not a bug workaround.
   socket, and an explicit `options()` handler overriding the automatic
   response with custom status/headers/body
 
-## Step 5 — Examples
+## Step 5 — Examples ✅
 
-- [ ] `examples/02-routing/server.ts` — complete the CRUD story already
-  started there: `app.put("/users/:id", ...)` full replace (404 if missing),
-  `app.patch("/users/:id", ...)` partial update (404 if missing),
-  `app.delete("/users/:id", ...)` remove (204 on success, 404 if missing).
-  Update header JSDoc. OPTIONS stays undemonstrated in code — same reasoning
+- [x] `examples/02-routing/server.ts` — completed the CRUD story: `PUT`
+  full replace (404 if missing), `PATCH` partial update via `Object.assign`
+  (404 if missing), `DELETE` remove (204 on success, 404 if missing). Header
+  JSDoc updated. `OPTIONS` stays undemonstrated in code — same reasoning
   already used for HEAD/405 in this file (shown via `.http` only)
-- [ ] `tests/http/routing.http` — add PUT, PATCH, DELETE (success + 404),
-  OPTIONS on a real path (204 + Allow), OPTIONS on a nonexistent path (404)
-- [ ] Live verification — boot the actual example server, curl/exercise
-  every new request in `routing.http`, confirm output matches docs before
-  marking this step done
+- [x] `tests/http/routing.http` — added PUT (success + 404), PATCH,
+  OPTIONS on a real path (204 + Allow), OPTIONS on a nonexistent path
+  (404), DELETE (success + 404). Reordered so DELETE targets Dana
+  (created by the earlier POST demo, id "4") rather than id "1", which
+  earlier requests in the file still depend on.
+- [x] Live verification — hit a real snag: port 8002 was still held by a
+  *stale server process from an earlier verification run earlier in this
+  session*, so the first verification pass silently tested old code and
+  every new request wrongly showed 405. Found and killed the stale
+  process (`netstat` + `Stop-Process`), reran clean, all 17 requests in
+  `routing.http` now behave as documented.
+- [x] Live verification also caught a real documentation bug before it
+  shipped: `POST /users/me` returns `Allow: GET, HEAD, PUT, PATCH, DELETE,
+  OPTIONS`, not just `GET, HEAD` as first assumed — `/users/:id`
+  structurally matches the path `/users/me` too (`id="me"`), and the 405
+  `Allow` computation considers every pattern that matches the *path*,
+  not just whichever route would actually have been selected. Fixed the
+  `.http` comment to explain this accurately instead of shipping the
+  wrong assumption.
 
 ## Step 6 — README documentation
 

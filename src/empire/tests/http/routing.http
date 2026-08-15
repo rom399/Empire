@@ -12,12 +12,38 @@ GET http://localhost:8002/users/1
 ### id "me"). Proves registration order, not just that a response comes back.
 GET http://localhost:8002/users/me
 
-### Create a user
+### Create a user — creates Dana as id "4" (used by the DELETE demo below)
 POST http://localhost:8002/users
 Content-Type: application/json
 
 {
     "name": "Dana",
+    "role": "user"
+}
+
+### PUT fully replaces a user — every field comes from the body
+PUT http://localhost:8002/users/1
+Content-Type: application/json
+
+{
+    "name": "Alice Updated",
+    "role": "admin"
+}
+
+### PUT on a nonexistent id — 404 via app logic, not routing
+PUT http://localhost:8002/users/999
+Content-Type: application/json
+
+{
+    "name": "Nobody",
+    "role": "user"
+}
+
+### PATCH partially updates a user — only the given fields change
+PATCH http://localhost:8002/users/1
+Content-Type: application/json
+
+{
     "role": "user"
 }
 
@@ -37,6 +63,27 @@ GET http://localhost:8002/nonexistent
 ### headers (Content-Type/Content-Length) still set as GET would
 HEAD http://localhost:8002/users/1
 
-### DELETE has no handler on /users/1, but GET/POST do elsewhere on
-### /users — 405 with an Allow header, not 404
-DELETE http://localhost:8002/users/1
+### OPTIONS on a real path — no app.options() registered here, so this is
+### the automatic response: 204 with an Allow header listing every method
+### actually available at /users/1 (GET, PUT, PATCH, DELETE, plus the
+### auto-added HEAD and OPTIONS itself)
+OPTIONS http://localhost:8002/users/1
+
+### OPTIONS on a completely unregistered path — still 404, same as any
+### other verb; there's no server-wide "OPTIONS *" special-casing
+OPTIONS http://localhost:8002/nonexistent
+
+### POST to /users/me — 405, not 404 (the path matches, just not for this
+### method). Allow lists GET, HEAD, PUT, PATCH, DELETE, OPTIONS — not just
+### GET/HEAD from the literal /users/me route. /users/:id structurally
+### matches "/users/me" too (id="me"), and 405's Allow computation
+### considers every pattern that matches the path, not just whichever
+### route would actually have been selected — so PUT/PATCH/DELETE from the
+### colliding :id route show up here as well.
+POST http://localhost:8002/users/me
+
+### DELETE removes Dana (created above as id "4") — 204, no body
+DELETE http://localhost:8002/users/4
+
+### DELETE on an id that never existed — 404 via app logic, not routing
+DELETE http://localhost:8002/users/999
