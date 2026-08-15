@@ -13,6 +13,7 @@ export interface EmpireOptions {
   host: string;
   port: number;
   logger?: ILogger;
+  maxBodySize?: number;
 }
 
 export class Empire {
@@ -21,6 +22,7 @@ export class Empire {
   private readonly server: http.Server;
 
   private readonly _logger: ILogger;
+  private readonly maxBodySize?: number;
 
   private readonly middlewares: Middleware[] = [];
   private readonly router: Router;
@@ -29,6 +31,7 @@ export class Empire {
     this.host = options.host;
     this.port = options.port;
     this._logger = options.logger ?? new ConsoleLogger();
+    this.maxBodySize = options.maxBodySize;
     this.router = new Router(this._logger);
 
     this.server = http.createServer(
@@ -42,7 +45,7 @@ export class Empire {
     req: http.IncomingMessage,
     res: http.ServerResponse,
   ): Promise<void> {
-    const ctx = new Context(req, res);
+    const ctx = new Context(req, res, {}, this.maxBodySize);
 
     const dispatch = async (index: number): Promise<void> => {
       const middleware = this.middlewares[index];

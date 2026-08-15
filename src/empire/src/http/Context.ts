@@ -9,21 +9,25 @@ import { CookieOptions } from "./CookieOptions";
 export class Context {
     private static readonly DEFAULT_REDIRECT_STATUS = 302;
     private static readonly FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
+    private static readonly DEFAULT_MAX_BODY_SIZE = 1024 * 1024; // 1 MB
 
     public readonly req: http.IncomingMessage;
     public readonly res: http.ServerResponse;
     public params: Record<string, string>;
 
+    private readonly maxBodySize: number;
     private bodyPromise?: Promise<string>;
 
     public constructor(
         req: http.IncomingMessage,
         res: http.ServerResponse,
-        params: Record<string, string> = {}
+        params: Record<string, string> = {},
+        maxBodySize: number = Context.DEFAULT_MAX_BODY_SIZE
     ) {
         this.req = req;
         this.res = res;
         this.params = params;
+        this.maxBodySize = maxBodySize;
     }
 
     public get headers(): IncomingHttpHeaders {
@@ -136,7 +140,15 @@ export class Context {
         const decoder = new TextDecoder('utf-8');
 
         let data = '';
+        let size = 0;
+
         for await (const chunk of this.req) {
+            size += (chunk as Uint8Array).length;
+
+            if (size > this.maxBodySize) {
+                throw new HttpError(413, "Request body too large");
+            }
+
             data += decoder.decode(chunk as Uint8Array, { stream: true });
         }
         // Decoder flush.
