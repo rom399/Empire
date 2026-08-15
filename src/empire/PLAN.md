@@ -464,8 +464,8 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 
 ### Completed
 
-* npm start — runs examples/basic-server/server.ts via tsx
-* Example applications — 01 through 05 covering all implemented features
+* npm start — runs examples/01-basic-server/server.ts via tsx
+* Example applications — 01 through 07 covering all implemented features
 * API test files — tests/http/empire.http, tests/http/invalid-json.http
 * .npmignore — excludes src/, tests/, examples/ from npm publish
 * Project restructured to Empire layout

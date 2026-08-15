@@ -82,14 +82,14 @@ empire/
 │       └── http/                    # MockHttp.ts — IncomingMessage/ServerResponse stand-ins
 │
 ├── examples/
-│   ├── basic-server/               # Original dev server
 │   ├── 01-basic-server/            # Hello world
 │   ├── 02-routing/                 # Route params (single and multi-segment), query
 │   │                                # strings, overlapping literal/param routes
 │   ├── 03-middleware/              # Middleware pipeline
 │   ├── 04-static-files/            # Static file serving — unprefixed wwwroot/ and prefixed uploads/
 │   ├── 05-error-handling/          # HttpError and BadRequestError
-│   └── 06-react-app/               # SPA support — spaFallback, streaming, index.html fallback, API routes
+│   ├── 06-react-app/               # SPA support — spaFallback, streaming, index.html fallback, API routes
+│   └── 07-body-size-limit/         # Configurable request body size limit, 413 on oversized bodies
 │
 ├── doc/
 │   ├── ARCHITECTURE.md             # This file
