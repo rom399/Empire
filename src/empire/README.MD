@@ -92,6 +92,45 @@ const app = new Empire({
 });
 ```
 
+## Request Body Size Limit
+
+Empire caps request bodies at 1MB by default. A request over the limit
+gets a `413` response as soon as it crosses the limit, instead of being
+buffered fully into memory first.
+
+```ts
+const app = new Empire({
+    host: "localhost",
+    port: 8008
+});
+```
+
+Pass `maxBodySize` (in bytes) to raise or lower the default:
+
+```ts
+const app = new Empire({
+    host: "localhost",
+    port: 8008,
+    maxBodySize: 10 * 1024 * 1024 // 10 MB
+});
+```
+
+The limit applies to `ctx.body()`, and therefore to `ctx.jsonBody()` and
+`ctx.form()` too, since both read the body through it:
+
+```ts
+app.post("/upload", async (ctx) => {
+    // Throws HttpError(413) automatically if the body is too large —
+    // no need to check the size yourself.
+    const data = await ctx.jsonBody();
+
+    ctx.json({ received: data });
+});
+```
+
+See `examples/07-body-size-limit` for a runnable version with a
+deliberately small limit so the 413 response is easy to trigger.
+
 ## Project Structure
 
 ```text
