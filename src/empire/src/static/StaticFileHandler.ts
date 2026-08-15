@@ -36,7 +36,8 @@ export class StaticFileHandler {
             pathWithinRoot.slice(1)
         );
 
-        const isSafe = absolutePath.startsWith(this.root);
+        const isSafe = absolutePath === this.root
+            || absolutePath.startsWith(this.root + path.sep);
 
         if (!isSafe) {
             ctx.status(403).text("Forbidden");
