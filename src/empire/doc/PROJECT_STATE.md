@@ -55,10 +55,14 @@ root cause, fix, files touched — is in PLAN.md Phase 9.3.
 - FINDING 13 — `HttpError` had no `code`/`retryable` and didn't set
   `.name`, so every framework error serialised as generic `"Error"`
 
-Current test status: **158 tests, 157 passing, 1 skipped** (a manual-only
+Current test status: **187 tests, 186 passing, 1 skipped** (a manual-only
 test for FINDING 8's `StaticFileHandler` half — flaky under full-suite
 parallelism for reasons not fully isolated; run via `RUN_FLAKY_TESTS=true
 npx vitest run tests/integration/StaticFileStreamingAbort.test.ts`).
+`tests/integration/FileStreaming.test.ts`'s abort-mid-stream test also
+flakes intermittently under full-suite parallelism (same root cause,
+unrelated to the skip above) — re-run before assuming a real regression
+if it's the only failure.
 
 Resolved:
 - ~~0 — Context API freeze~~ — all v1 Context members implemented
@@ -225,6 +229,12 @@ Post-v1 only (requires DI):
 No v1.0.0 blockers remain. Outstanding roadmap work not gating v1.0.0:
 - Phase 3 — route groups, route-level middleware, wildcard routes,
   optional parameters, trailing-slash support (all 7 HTTP methods done)
+- Phase 9.2 — a handful of its own checklist items are still unchecked
+  and unverified in `PLAN.md`: `get()`/`post()` real-server coverage in
+  `Empire.test.ts`, and most of `StaticFileHandler.test.ts`'s "Path
+  traversal protection" and "Prefix matching" items (the handler does
+  return 403 and does support prefixes — no test currently asserts either
+  directly)
 
 ---
 
