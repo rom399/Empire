@@ -43,6 +43,27 @@ export class Router {
     }
 
     /**
+     * Registers a handler for PUT requests to the given path.
+     */
+    public put(path: string, handler: RouteHandler): void {
+        this.addRoute("PUT", path, handler);
+    }
+
+    /**
+     * Registers a handler for PATCH requests to the given path.
+     */
+    public patch(path: string, handler: RouteHandler): void {
+        this.addRoute("PATCH", path, handler);
+    }
+
+    /**
+     * Registers a handler for DELETE requests to the given path.
+     */
+    public delete(path: string, handler: RouteHandler): void {
+        this.addRoute("DELETE", path, handler);
+    }
+
+    /**
      * Registers a handler invoked when no route matches a GET request,
      * in place of the default plain-text 404. Used for single-page-app
      * support, where an unmatched path (e.g. a React Router route) should

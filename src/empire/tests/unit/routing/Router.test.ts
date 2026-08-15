@@ -6,7 +6,7 @@ import { createMockRequest, createMockResponse } from "../../fixtures/http/MockH
 
 describe("Router", () => {
 
-    describe("get / post / handle", () => {
+    describe("get / post / put / patch / delete / handle", () => {
 
         it("dispatches a GET request to a registered handler", async () => {
             const router = new Router(new TestLogger());
@@ -32,6 +32,44 @@ describe("Router", () => {
 
             expect(res.statusCode).toBe(201);
             expect(res.body).toBe(JSON.stringify({ created: true }));
+        });
+
+        it("dispatches a PUT request to a registered handler", async () => {
+            const router = new Router(new TestLogger());
+            router.put("/users/1", (ctx) => ctx.json({ updated: true }));
+
+            const req = createMockRequest({ method: "PUT", url: "/users/1" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toBe(JSON.stringify({ updated: true }));
+        });
+
+        it("dispatches a PATCH request to a registered handler", async () => {
+            const router = new Router(new TestLogger());
+            router.patch("/users/1", (ctx) => ctx.json({ patched: true }));
+
+            const req = createMockRequest({ method: "PATCH", url: "/users/1" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(200);
+            expect(res.body).toBe(JSON.stringify({ patched: true }));
+        });
+
+        it("dispatches a DELETE request to a registered handler", async () => {
+            const router = new Router(new TestLogger());
+            router.delete("/users/1", (ctx) => ctx.status(204).text(""));
+
+            const req = createMockRequest({ method: "DELETE", url: "/users/1" });
+            const res = createMockResponse();
+
+            await router.handle(req, res);
+
+            expect(res.statusCode).toBe(204);
         });
 
         it("passes route parameters to the handler via ctx.params", async () => {
@@ -95,14 +133,15 @@ describe("Router", () => {
             const router = new Router(new TestLogger());
             router.get("/users", (ctx) => ctx.json({}));
             router.post("/users", (ctx) => ctx.json({}));
+            router.put("/users", (ctx) => ctx.json({}));
 
-            const req = createMockRequest({ method: "PUT", url: "/users" });
+            const req = createMockRequest({ method: "PATCH", url: "/users" });
             const res = createMockResponse();
 
             await router.handle(req, res);
 
             expect(res.statusCode).toBe(405);
-            expect(res.getHeader("Allow")).toBe("GET, HEAD, POST");
+            expect(res.getHeader("Allow")).toBe("GET, HEAD, POST, PUT");
         });
 
         it("returns the HttpError status code and JSON body when a handler throws HttpError", async () => {
