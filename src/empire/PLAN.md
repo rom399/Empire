@@ -491,6 +491,13 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * API test files — tests/http/empire.http, tests/http/invalid-json.http
 * .npmignore — excludes src/, tests/, examples/ from npm publish
 * Project restructured to Empire layout
+* GitHub Actions CI (`.github/workflows/ci.yml`, at the git repo root —
+  `D:/dev/ROM/.github/`, not under `empire/`) — runs `npm ci`, `npx tsc
+  --noEmit`, and `npx vitest run` on every push to `main` and every pull
+  request, scoped to the `src/empire` project root
+* Dependabot (`.github/dependabot.yml`) — weekly update PRs for npm
+  dependencies in `src/empire` and for the GitHub Actions versions pinned
+  in the CI workflow
 
 ### Remaining
 
