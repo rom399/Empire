@@ -126,13 +126,20 @@ a deliberate spec change, not a bug workaround.
   `.http` comment to explain this accurately instead of shipping the
   wrong assumption.
 
-## Step 6 — README documentation
+## Step 6 — README documentation ✅
 
-- [ ] Extend the existing "Routing" section in `README.MD` (don't create a
-  new section) with the full verb list, a PUT/PATCH/DELETE code sample on
-  `/users/:id` matching the existing example style, and a dedicated
-  explanation of OPTIONS's automatic behavior vs. explicit `app.options()`
-- [ ] Pointer to `examples/02-routing` for the runnable version
+- [x] Extended the existing "Routing" section in `README.MD` with the full
+  verb list, a PUT/PATCH/DELETE code sample on `/users/:id`, a note that
+  HEAD needs no registration, and OPTIONS's automatic 204+Allow behavior
+  vs. an explicit `app.options()` override, with an example of each
+- [x] Moved the `examples/02-routing` pointer to after the new content, so
+  it accurately covers everything shown, not just the earlier multi-param
+  example
+- [x] Verified every new code sample actually runs as documented — a
+  standalone script exercising the exact PUT/DELETE/auto-OPTIONS/custom-
+  OPTIONS samples against a live server, confirming the Allow header order
+  in the README (`GET, HEAD, PUT, PATCH, DELETE, OPTIONS`) matches reality
+  exactly rather than assuming it
 
 ## Step 7 — Close out documentation (mirrors the Phase 9.1 doc-sync pattern)
 

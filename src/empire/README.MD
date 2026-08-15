@@ -65,8 +65,48 @@ app.get("/users/:userId/posts/:postId", (ctx) => {
 });
 ```
 
-See `examples/02-routing` for a runnable version of both, alongside query
-strings and a realistic REST-style user API.
+Every HTTP method has a matching registration method — `app.get()`,
+`app.post()`, `app.put()`, `app.patch()`, `app.delete()`, and
+`app.options()`:
+
+```ts
+app.put("/users/:id", async (ctx) => {
+    const body = await ctx.jsonBody(); // full replacement
+    ctx.json({ id: ctx.params.id, ...body });
+});
+
+app.patch("/users/:id", async (ctx) => {
+    const body = await ctx.jsonBody(); // partial update
+    ctx.json({ id: ctx.params.id, ...body });
+});
+
+app.delete("/users/:id", (ctx) => {
+    ctx.status(204).text("");
+});
+```
+
+`HEAD` needs no registration of its own — it's automatically answered
+wherever `GET` is registered, with the body discarded but the same
+headers set.
+
+`OPTIONS` also needs no registration by default: any path with at least
+one other method registered automatically responds `204` with an `Allow`
+header listing what's available there. `app.options()` is only needed if
+you want custom behavior instead of that automatic response:
+
+```ts
+// No app.options("/users/:id", ...) needed — OPTIONS /users/:id already
+// responds 204 with Allow: GET, HEAD, PUT, PATCH, DELETE, OPTIONS
+
+app.options("/users", (ctx) => {
+    // Custom behavior overrides the automatic response — e.g. for CORS
+    // preflight — and takes priority whenever it's registered.
+    ctx.header("Access-Control-Allow-Methods", "GET, POST").status(204).text("");
+});
+```
+
+See `examples/02-routing` for a runnable version of all of this,
+alongside query strings and a full REST-style user API.
 
 **Routes are matched in registration order, and the first match wins —
 this is the developer's responsibility to get right, not something Empire
