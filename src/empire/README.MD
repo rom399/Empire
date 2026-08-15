@@ -77,7 +77,7 @@ app.get("/users/:userId/posts/:postId", (ctx) => {
 });
 ```
 
-Every HTTP method has a matching registration method — `app.get()`,
+Every HTTP method has a matching registration method - `app.get()`,
 `app.post()`, `app.put()`, `app.patch()`, `app.delete()`, and
 `app.options()`:
 
@@ -97,7 +97,7 @@ app.delete("/users/:id", (ctx) => {
 });
 ```
 
-`HEAD` needs no registration of its own — it's automatically answered
+`HEAD` needs no registration of its own - it's automatically answered
 wherever `GET` is registered, with the body discarded but the same
 headers set.
 
@@ -107,12 +107,12 @@ header listing what's available there. `app.options()` is only needed if
 you want custom behavior instead of that automatic response:
 
 ```ts
-// No app.options("/users/:id", ...) needed — OPTIONS /users/:id already
+// No app.options("/users/:id", ...) needed - OPTIONS /users/:id already
 // responds 204 with Allow: GET, HEAD, PUT, PATCH, DELETE, OPTIONS
 
 app.options("/users", (ctx) => {
-    // Custom behavior overrides the automatic response — e.g. for CORS
-    // preflight — and takes priority whenever it's registered.
+    // Custom behavior overrides the automatic response - e.g. for CORS
+    // preflight - and takes priority whenever it's registered.
     ctx.header("Access-Control-Allow-Methods", "GET, POST").status(204).text("");
 });
 ```
@@ -120,7 +120,7 @@ app.options("/users", (ctx) => {
 See `examples/02-routing` for a runnable version of all of this,
 alongside query strings and a full REST-style user API.
 
-**Routes are matched in registration order, and the first match wins —
+**Routes are matched in registration order, and the first match wins -
 this is the developer's responsibility to get right, not something Empire
 resolves automatically.** If two registered routes could both match the
 same request, whichever was registered first is used, even if the other
@@ -130,7 +130,7 @@ looks like the "more specific" match:
 app.get("/users/:id", (ctx) => ctx.text("param"));
 app.get("/users/new", (ctx) => ctx.text("literal"));
 
-// GET /users/new -> "param" — :id already matched "new" first.
+// GET /users/new -> "param" - :id already matched "new" first.
 // The /users/new route above is unreachable.
 ```
 
@@ -171,12 +171,12 @@ app.useStaticFiles("./storage/uploads", { prefix: "/uploads" });
 ```
 
 If a request path resolves to a directory, an `index.html` inside it is
-served automatically — `/about/` and `/about` (no trailing slash) both
+served automatically - `/about/` and `/about` (no trailing slash) both
 serve `root/about/index.html`. A directory with no `index.html` inside it
 falls through instead of erroring.
 
 Pass `{ spaFallback: true }` to serve `root/index.html` for any unmatched
-`GET` request instead of a `404` — useful for single-page apps using
+`GET` request instead of a `404` - useful for single-page apps using
 client-side routing. See `examples/06-react-app` for the full behavior
 set alongside API routes.
 
@@ -206,7 +206,7 @@ router
 Response
 ```
 
-A middleware must call `next()` to continue the chain — if it doesn't,
+A middleware must call `next()` to continue the chain - if it doesn't,
 the request is left unanswered (no timeout, no automatic error) rather
 than falling through to the next middleware or the router:
 
@@ -219,7 +219,7 @@ app.use(async (ctx, next) => {
 app.use(async (ctx, next) => {
     if (!isAuthenticated(ctx)) {
         ctx.status(401).text("Unauthorized");
-        return; // chain stops here — next() is never called
+        return; // chain stops here - next() is never called
     }
     await next();
 });
@@ -327,7 +327,7 @@ The limit applies to `ctx.body()`, and therefore to `ctx.jsonBody()` and
 
 ```ts
 app.post("/upload", async (ctx) => {
-    // Throws HttpError(413) automatically if the body is too large —
+    // Throws HttpError(413) automatically if the body is too large -
     // no need to check the size yourself.
     const data = await ctx.jsonBody();
 
