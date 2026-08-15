@@ -2,7 +2,7 @@
 
 ## Status
 
-**Not started.** Created 2026-08-15.
+**Complete.** Created 2026-08-15, finished 2026-08-15.
 
 ## Scope
 
@@ -183,9 +183,10 @@ Both example directories referenced (`examples/04-static-files`,
 doesn't list routing or HTTP verbs either, so it's already out of scope
 for this step; not the mechanism the doc uses for feature documentation.
 
-## Step 6 — Final verification
+## Step 6 — Final verification ✅
 
-- [ ] `npx tsc --noEmit` clean
-- [ ] `npx vitest run` — full suite green, note new total test count
-- [ ] Confirm no regressions in existing `StaticFileHandler.test.ts` and
-  `Empire.test.ts` tests — both files are being extended, not rewritten
+- [x] `npx tsc --noEmit` clean
+- [x] `npx vitest run` — full suite green: **186 passed, 1 skipped** (187
+  total, up from 180 at the start of this feature)
+- [x] Confirmed no regressions: `StaticFileHandler.test.ts` 15/15,
+  `Empire.test.ts` 14/14 — both files extended, not rewritten
