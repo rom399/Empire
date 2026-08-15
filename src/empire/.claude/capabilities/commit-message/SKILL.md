@@ -14,7 +14,7 @@ Generate a commit message from the current changes, then commit if the user has 
 
 ## 2. Structure the message
 
-Write a message with two parts:
+Detail is welcome — as long as it's detail about the change being checked in, not detail about the process of getting there. Write a message with two parts:
 
 **Summary line** — a single imperative-mood sentence (e.g. "Add X", "Fix Y", "Refactor Z"), under ~72 characters, no period at the end.
 
@@ -24,6 +24,12 @@ Write a message with two parts:
 - Files touched, when it helps orient the reader
 
 Use blank lines between groups. Avoid vague lines like "various fixes" or "code cleanup" — name the actual thing that changed. If the diff includes something notable like a breaking change, a TODO left behind, or a follow-up still needed, call it out explicitly rather than letting it get buried.
+
+**Leave out of the message** — this is the part that's easy to get wrong: anything about how the change was arrived at rather than what the change is.
+- The debugging/investigation journey — dead ends, snags hit while verifying, "this took a detour because X"
+- Narrated reasoning about why one approach was chosen over another, beyond a single short clause if truly necessary
+- Prose about test/verification results (a one-line "N/N tests passing" is fine if useful; don't narrate the run)
+- Anything not directly visible in the diff
 
 Keep it factual and grounded in the actual diff — do not describe changes that aren't in the diff, and do not pad the message with generic filler to make it look thorough.
 
