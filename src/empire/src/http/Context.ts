@@ -326,8 +326,37 @@ export class Context {
         // Stream rather than read into memory — files may be large
         await new Promise<void>((resolve, reject) => {
             const stream = fs.createReadStream(filePath);
-            stream.on("error", reject);
-            this.res.on("finish", resolve);
+
+            const cleanup = () => {
+                stream.destroy();
+                stream.off("error", onError);
+                this.res.off("finish", onFinish);
+                this.res.off("close", onClose);
+            };
+
+            const onFinish = () => {
+                cleanup();
+                resolve();
+            };
+
+            // The client disconnecting mid-stream never fires "finish" —
+            // only "close". Settling here instead of leaving the promise
+            // pending forever, and destroying the still-open read stream,
+            // is what stops an aborted download from hanging the handler
+            // and leaking a file descriptor.
+            const onClose = () => {
+                cleanup();
+                resolve();
+            };
+
+            const onError = (err: Error) => {
+                cleanup();
+                reject(err);
+            };
+
+            stream.on("error", onError);
+            this.res.on("finish", onFinish);
+            this.res.on("close", onClose);
             stream.pipe(this.res);
         });
     }
