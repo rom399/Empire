@@ -133,19 +133,24 @@ Full suite: 182 passed, 1 pre-existing flake in
 `tests/integration/FileStreaming.test.ts` (untouched by this step —
 re-ran in isolation, passed), 1 skipped (manual-only flaky test).
 
-## Step 4 — `StaticFileHandler.test.ts`: directory index fallback
+## Step 4 — `StaticFileHandler.test.ts`: directory index fallback ✅
 
-- [ ] New `describe("directory index fallback")` block
-- [ ] Extend `beforeAll` fixture setup: a subdirectory with its own
-  `index.html` (e.g. `root/about/index.html`), and a separate empty
-  subdirectory with no `index.html` inside it
-- [ ] `it('serves index.html when the request path resolves to a directory containing one')`
-  — request `/about/`, matching the `.../about/` → `.../about/index.html`
+- [x] New `describe("directory index fallback")` block
+- [x] Extended `beforeAll` fixture setup: `root/about/index.html`, and a
+  separate empty `root/empty/` subdirectory with no `index.html` inside it
+- [x] `it('serves index.html when the request path resolves to a directory containing one')`
+  — requests `/about/`, matching the `.../about/` → `.../about/index.html`
   behavior documented in `doc/ARCHITECTURE.md`
-- [ ] `it('serves index.html when the request path has no trailing slash')`
-  — request `/about` (no trailing slash), confirming the behavior verified
+- [x] `it('serves index.html when the request path has no trailing slash')`
+  — requests `/about` (no trailing slash), confirming the behavior verified
   above: identical result either way
-- [ ] `it('returns false when the request path resolves to a directory with no index.html')`
+- [x] `it('returns false when the request path resolves to a directory with no index.html')`
+  — requests `/empty/`
+
+Verified: `tsc --noEmit` clean, 15/15 tests in this file passing (78ms).
+Full suite: 186 passed, 1 skipped — clean run, no flake this time
+(`FileStreaming.test.ts`'s abort-mid-stream test is intermittent, not
+consistent; see the pre-existing note above).
 
 ## Step 5 — README documentation
 

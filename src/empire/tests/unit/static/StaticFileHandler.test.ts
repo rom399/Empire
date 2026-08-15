@@ -39,6 +39,11 @@ describe("StaticFileHandler", () => {
         fs.writeFileSync(path.join(root, "index.html"), "<h1>public</h1>");
         fs.writeFileSync(path.join(root, "style.css"), "body { color: red; }");
         fs.writeFileSync(path.join(sibling, "secrets.txt"), "TOP SECRET");
+
+        fs.mkdirSync(path.join(root, "about"));
+        fs.writeFileSync(path.join(root, "about", "index.html"), "<h1>about</h1>");
+
+        fs.mkdirSync(path.join(root, "empty"));
     });
 
     afterAll(() => {
@@ -84,6 +89,32 @@ describe("StaticFileHandler", () => {
         it("returns false when the file does not exist, so the middleware chain continues", async () => {
             const handler = new StaticFileHandler({ root });
             const { ctx } = contextFor("/missing.html");
+
+            expect(await handler.handle(ctx)).toBe(false);
+        });
+    });
+
+    describe("directory index fallback", () => {
+
+        it("serves index.html when the request path resolves to a directory containing one", async () => {
+            const handler = new StaticFileHandler({ root });
+            const { ctx, res } = contextFor("/about/");
+
+            expect(await handler.handle(ctx)).toBe(true);
+            expect(res.body).toContain("about");
+        });
+
+        it("serves index.html when the request path has no trailing slash", async () => {
+            const handler = new StaticFileHandler({ root });
+            const { ctx, res } = contextFor("/about");
+
+            expect(await handler.handle(ctx)).toBe(true);
+            expect(res.body).toContain("about");
+        });
+
+        it("returns false when the request path resolves to a directory with no index.html", async () => {
+            const handler = new StaticFileHandler({ root });
+            const { ctx } = contextFor("/empty/");
 
             expect(await handler.handle(ctx)).toBe(false);
         });
