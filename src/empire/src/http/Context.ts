@@ -39,7 +39,7 @@ export class Context {
     }
 
     public get path(): string {
-        return this.url.pathname;
+        return decodeURIComponent(this.url.pathname);
     }
 
     public get query(): URLSearchParams {

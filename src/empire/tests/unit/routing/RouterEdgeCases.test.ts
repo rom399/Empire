@@ -58,6 +58,18 @@ describe("Router edge cases", () => {
             // Router matched on the raw string; Context.path reports the decoded one.
             expect(seenPath).toBe("/files/a b");
         });
+
+        it("rejects rather than matching when a route parameter has malformed percent-encoding", async () => {
+            const router = new Router(new TestLogger());
+            router.get("/users/:name", (ctx) => ctx.json({ name: ctx.params.name }));
+
+            // "%zz" isn't a valid percent-encoded triplet — decodeURIComponent()
+            // throws a URIError. Router.handle() has no try/catch of its own
+            // around matching, so this propagates as a rejection here; it's
+            // Empire's pipeline-level error handling that turns this into a
+            // safe response in a real app — see MalformedRequestPath.test.ts.
+            await expect(dispatch(router, "/users/%zz")).rejects.toThrow();
+        });
     });
 
     describe("path normalisation", () => {

@@ -16,8 +16,10 @@ export class RouteMatcher {
         const routeSegments =
             routePath.split("/").filter(Boolean);
 
-        const requestSegments =
-            requestPath.split("/").filter(Boolean);
+        const requestSegments = requestPath
+            .split("/")
+            .filter(Boolean)
+            .map((segment) => decodeURIComponent(segment));
 
         if (routeSegments.length !== requestSegments.length) {
             return {
