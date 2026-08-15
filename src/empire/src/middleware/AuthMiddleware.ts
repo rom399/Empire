@@ -11,5 +11,5 @@ export const AuthMiddleware: Middleware = (ctx, next) => {
         return;
     }
 
-    next();
+    return next();
 };
