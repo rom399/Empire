@@ -896,17 +896,29 @@ reuse or extend that fixture directory rather than creating a new one.
 * [x] `it('returns false when the request path resolves to a directory with no index.html')`
 
 **Path traversal protection**
-* [ ] `it('returns 403 when the resolved path escapes the root directory')`
-* [ ] `it('does not serve files outside root even with encoded traversal segments')`
+* [x] `it('returns 403 when the resolved path escapes the root directory')`
+  — the test previously here under a different name was vacuous (asserted
+  on `res.body`, which the handler never touches on this path); replaced
+  with a version that bypasses `ctx.path`'s URL normalisation directly and
+  actually reaches the 403 branch, confirmed by a temporary break-and-revert
+  of the guard. See `doc/features/PHASE_9_2_CLOSEOUT_TESTS.md` Step 2
+* [x] `it('does not serve files outside root even with encoded traversal segments')`
 
 **Prefix matching**
-* [ ] `it('serves a file when the request path starts with the configured prefix')`
-* [ ] `it('returns false when the request path does not start with the prefix')`
-* [ ] `it('strips the prefix before resolving the file on disk')`
-* [ ] `it('treats a prefix followed by another segment as non-matching, e.g. /assets-other does not match /assets')`
-* [ ] `it('normalises a trailing slash on the configured prefix')`
-* [ ] `it('treats a bare "/" prefix as no prefix at all')`
-* [ ] `it('has no prefix restriction when none is configured — every path is checked')`
+* [x] `it('serves a file when the request path starts with the configured prefix')`
+* [x] `it('returns false when the request path does not start with the prefix')`
+  — covered by the existing `'ignores requests outside the mounted prefix'`
+  test, just never checked off
+* [x] `it('strips the prefix before resolving the file on disk')`
+* [x] `it('treats a prefix followed by another segment as non-matching, e.g. /assets-other does not match /assets')`
+  — covered by the existing `'does not treat /assets-other as being under
+  /assets'` test, just never checked off
+* [x] `it('normalises a trailing slash on the configured prefix')`
+* [x] `it('treats a bare "/" prefix as no prefix at all')`
+* [x] `it('has no prefix restriction when none is configured — every path is checked')`
+  — implemented as `'has no prefix restriction when none is configured, so
+  every path is checked'` (comma instead of the em dash above, matching
+  this file's own `it()`-title style)
 
 ### `tests/unit/Empire.test.ts`
 
@@ -929,21 +941,26 @@ without losing most of the value of the test.
   `doc/features/TEST_UPDATES_EMPIRE_STATICFILEHANDLER.md`
 * [x] `it('does not proceed to the next middleware when one does not call next()')`
 * [x] `it('dispatches to a registered route when the middleware chain completes')`
-* [ ] `it('get() registers a route reachable via the server')`
-* [ ] `it('post() registers a route reachable via the server')`
+* [x] `it('get() registers a route reachable via the server')`
+* [x] `it('post() registers a route reachable via the server')`
 * [x] `it('useStaticFiles() serves a file from the given root')`
 * [x] `it('useStaticFiles() falls through to routing when no file matches')`
 * [x] `it('useStaticFiles() with spaFallback serves index.html for an unmatched GET path')`
 
 ### Verification
 
-* [x] `npx vitest run` — 186 passed, 1 skipped (as of
-  `doc/features/TEST_UPDATES_EMPIRE_STATICFILEHANDLER.md`'s Step 6)
+* [x] `npx vitest run` — 193 passed, 1 skipped (as of
+  `doc/features/PHASE_9_2_CLOSEOUT_TESTS.md`'s Steps 1-3)
 * [x] `npx tsc --noEmit` — no type errors
 * [ ] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.2 complete
-  — not yet: `get()`/`post()` real-server coverage, the "Path traversal
-  protection" and most of the "Prefix matching" items above are still
-  unchecked and unverified, so Phase 9.2 isn't fully done
+  — not yet: `get()`/`post()`, "Path traversal protection", and "Prefix
+  matching" are now all resolved (see
+  `doc/features/PHASE_9_2_CLOSEOUT_TESTS.md`), but the `HttpError.test.ts`,
+  `BadRequestError.test.ts`, and `MimeTypes.test.ts` checklist items above
+  are still unchecked despite those test files visibly existing and
+  passing in every full-suite run — likely stale checkboxes rather than a
+  real gap, but not verified in this pass, so left as-is rather than
+  assumed
 
 ---
 

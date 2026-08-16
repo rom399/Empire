@@ -98,72 +98,98 @@ pre-existing `tests/integration/FileStreaming.test.ts` flake (see
 `doc/PROJECT_STATE.md`), confirmed by re-running that file in isolation
 (3/3 passed), not caused by this step.
 
-## Step 2 — `StaticFileHandler.test.ts`: path traversal protection
+## Step 2 — `StaticFileHandler.test.ts`: path traversal protection ✅
 
-- [ ] Strengthen the existing `'never serves a file from a prefix-sharing
-  sibling directory'` test (or add a new one reusing the same `sibling`
-  fixture) to assert `res.statusCode === 403` and the handler's return value
-  is `true` — not just that the secret text is absent from the body
-- [ ] `it('returns 403 when the resolved path escapes the root directory')`
-  — repurpose/rename the strengthened test above to this title if it now
-  matches PLAN.md's wording, rather than keeping two near-duplicate tests
-- [ ] `it('does not serve files outside root even with encoded traversal
-  segments')` — request a percent-encoded traversal path (e.g.
-  `/%2e%2e/%2e%2e/etc/passwd`) through `contextFor()`; expect `false`
-  (falls through cleanly, matching the existing plain-`..` case), confirming
-  the decode-then-normalise behavior holds through the static handler too
-- [ ] Note in the test file: this is defence-in-depth, consistent with the
-  FINDING 2 comment already at the top of the file — not exploitable through
-  Empire's own pipeline today, but still worth pinning down directly at the
-  handler level
+**Real finding while implementing this step, not just adding coverage:**
+the existing `'never serves a file from a prefix-sharing sibling
+directory'` test was vacuous. `ctx.path` always goes through URL-based
+normalisation, which resolves `..` before the handler ever sees it — so the
+test's request (`/../wwwsecret/secrets.txt`) was already collapsed to
+`/wwwsecret/secrets.txt` by the time `handle()` ran, resolving to a
+non-existent path *inside* root, not the sibling at all. `handle()` returned
+`false` without ever touching `res.body`, so `expect(res.body).not.toContain(
+"TOP SECRET")` passed regardless of whether the 403 guard worked. Confirmed
+by temporarily breaking the guard (`isSafe = true`) and re-running: the old
+test still passed. This is exactly what the file's own FINDING 2 comment
+already says ("This is NOT currently exploitable through Empire's own
+pipeline... if the handler is constructed directly") — it just hadn't been
+translated into a test that actually exercises the branch.
 
-## Step 3 — `StaticFileHandler.test.ts`: prefix matching
+- [x] Replaced the vacuous test with `it('returns 403 when the resolved
+  path escapes the root directory')`, using `Object.defineProperty(ctx,
+  "path", { value: "/../wwwsecret/secrets.txt", configurable: true })` to
+  bypass `ctx.path`'s normal URL-based normalisation and feed the handler
+  the raw, unnormalised string directly — the only way to reach this guard
+  through `handle()` itself rather than re-testing the boundary math in
+  isolation like the test above it already does. Asserts `res.statusCode
+  === 403`, `res.body === "Forbidden"`, and the return value is `true`.
+  Verified this actually catches a regression: temporarily set `isSafe =
+  true` in `StaticFileHandler.ts`, re-ran the file, confirmed exactly this
+  one test failed (200 instead of 403), then reverted
+- [x] `it('does not serve files outside root even with encoded traversal
+  segments')` — requests `/%2e%2e/%2e%2e/etc/passwd` through the normal
+  `contextFor()` path (no override needed); confirmed via a quick Node
+  check that this normalises to `/etc/passwd` before the handler runs, same
+  as the plain-`..` case, so it falls through with `false`
+- [x] Both new tests' comments note this is defence-in-depth, consistent
+  with the FINDING 2 comment already at the top of the file
 
-- [ ] Extend the `beforeAll` fixture only if needed — likely reusable as-is
-  (`root/index.html`, `root/style.css` already exist, and `root` has no
-  `assets/` subdirectory, which is exactly what proves prefix-stripping
-  below rather than a lucky coincidence)
-- [ ] `it('serves a file when the request path starts with the configured
-  prefix')` — `{ root, prefix: "/assets" }`, request `/assets/index.html`,
-  expect `true` and the real file content
-- [ ] `it('strips the prefix before resolving the file on disk')` — same
-  setup, assert the served content is identical to what `/index.html`
-  serves with no prefix configured, proving `/assets` was removed before
-  hitting the filesystem rather than treated as a literal subdirectory (a
-  stripping bug would 404 here, not silently serve the wrong file, since
-  `root` has no `assets/` directory)
-- [ ] `it('normalises a trailing slash on the configured prefix')` — `{
-  root, prefix: "/assets/" }` (trailing slash), confirm `/assets/index.html`
-  still resolves identically to the no-trailing-slash case
-- [ ] `it('treats a bare "/" prefix as no prefix at all')` — `{ root,
-  prefix: "/" }`, confirm requests behave exactly as if no prefix were
-  configured (e.g. `/index.html` resolves)
-- [ ] `it('has no prefix restriction when none is configured — every path
-  is checked')` — explicit test alongside the coverage this already gets
-  implicitly from every other describe block in the file, added for
-  documentation parity with PLAN.md's exact item list
-- [ ] Do **not** add new tests for the 2 already-covered items listed in
-  Scope above — check them off in Step 4 instead, pointing at the existing
-  tests that satisfy them
+Verified: `tsc --noEmit` clean, 21/21 tests in `StaticFileHandler.test.ts`
+passing.
 
-## Step 4 — Documentation
+## Step 3 — `StaticFileHandler.test.ts`: prefix matching ✅
 
-- [ ] `PLAN.md` Phase 9.2 — check off every item resolved by Steps 1–3: both
-  `get()`/`post()` items, both "Path traversal protection" items, and all 7
-  "Prefix matching" items (including the 2 that were already covered —
-  annotate those two with a pointer to the pre-existing test that satisfies
-  them, same pattern used for the "runs registered middleware in
-  registration order" item in the previous sync)
-- [ ] `PLAN.md` Phase 9.2 Verification section — if every item above is
-  checked off after this work, remove the "not yet" caveat on the "mark
-  Phase 9.2 complete" line and check it off; otherwise update the caveat to
-  describe whatever (if anything) still remains
-- [ ] `doc/PROJECT_STATE.md` — resolve or narrow the "What Is Incomplete"
-  Phase 9.2 note added in the previous sync, and update the "Current test
-  status" line in the Bug Hunt section to the new total test count
-- [ ] Quick check of `doc/ARCHITECTURE.md`'s `StaticFileHandler` section —
-  likely needs no change, since this step only adds tests for
-  already-documented behavior, but worth confirming rather than assuming
+- [x] Fixture reused as-is, no extension needed — `root/index.html`,
+  `root/style.css` already existed, and `root` having no `assets/`
+  subdirectory is exactly what makes the stripping test below meaningful
+  rather than a coincidence
+- [x] `it('serves a file when the request path starts with the configured
+  prefix')` — `{ root, prefix: "/assets" }`, requests `/assets/index.html`,
+  asserts `true` and the real file content
+- [x] `it('strips the prefix before resolving the file on disk')` — same
+  setup, requests `/assets/style.css`, asserts the body equals the known
+  `root/style.css` fixture content exactly — since `root` has no `assets/`
+  directory, a stripping bug would 404 here rather than silently serve the
+  wrong file
+- [x] `it('normalises a trailing slash on the configured prefix')` — `{
+  root, prefix: "/assets/" }` (trailing slash), confirms
+  `/assets/index.html` still resolves
+- [x] `it('treats a bare "/" prefix as no prefix at all')` — `{ root,
+  prefix: "/" }`, confirms `/index.html` resolves exactly as if no prefix
+  were configured
+- [x] `it('has no prefix restriction when none is configured, so every path
+  is checked')` — phrased with a comma rather than PLAN.md's em dash, to
+  match this file's own `it()`-title style; explicit test alongside the
+  coverage this already gets implicitly from every other describe block in
+  the file, added for documentation parity with PLAN.md's exact item list
+- [x] No new tests added for the 2 already-covered items from Scope above —
+  checked off in Step 4 instead, pointing at the existing tests that
+  satisfy them
+
+Verified: `tsc --noEmit` clean, 21/21 tests in `StaticFileHandler.test.ts`
+passing (same run as Step 2 above — both steps landed in one edit pass).
+
+## Step 4 — Documentation ✅
+
+- [x] `PLAN.md` Phase 9.2 — checked off both `get()`/`post()` items, both
+  "Path traversal protection" items, and all 7 "Prefix matching" items,
+  including the 2 already covered by pre-existing tests (annotated with a
+  pointer to those tests, same pattern used for the "runs registered
+  middleware in registration order" item in the previous sync)
+- [x] `PLAN.md` Phase 9.2 Verification section — **not** marked complete.
+  While updating this I found `HttpError.test.ts`, `BadRequestError.test.ts`,
+  and `MimeTypes.test.ts` checklist items still unchecked despite those
+  test files visibly existing and passing in every full-suite run — out of
+  this feature's scope (Empire GET/POST and StaticFileHandler traversal/
+  prefix matching only, per this doc's own Scope section), so left as a
+  named caveat rather than silently fixed or silently ignored
+- [x] `doc/PROJECT_STATE.md` — narrowed the "What Is Incomplete" Phase 9.2
+  note to point at the same remaining `HttpError`/`BadRequestError`/
+  `MimeTypes` items, and updated "Current test status" to 195 tests, 193
+  passing, 1 skipped
+- [x] Checked `doc/ARCHITECTURE.md`'s `StaticFileHandler` section — no
+  change needed; it already correctly documents the 403 and prefix-matching
+  behavior this step only added test coverage for, not new behavior
 
 ## Step 5 — Final verification
 
