@@ -408,4 +408,4 @@ This project is a learning exercise and a platform for experimenting with:
 
 ## License
 
-MIT
+MIT. See [LICENSE](../../LICENSE).
