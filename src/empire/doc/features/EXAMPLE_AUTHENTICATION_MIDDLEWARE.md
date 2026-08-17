@@ -149,6 +149,72 @@ The middleware must:
 6. Reject when the user is found but not active.
 7. On success, put the user on `ctx.state.user` and call `next()`.
 
+A reference implementation, satisfying every point above plus the details
+in the next section:
+
+```typescript
+const PUBLIC_PATHS = ["/public"];
+
+function unauthorized(ctx: Context): never {
+    ctx.res.setHeader("WWW-Authenticate", "Bearer");
+    throw new HttpError(401, "Invalid or missing credentials");
+}
+
+const authMiddleware: Middleware = (ctx, next) => {
+
+    // Empire does not yet support per-route middleware, so this is how a
+    // path gets excluded from an app.use() middleware that otherwise runs
+    // for every request. A real framework would let you scope this to a
+    // route group instead. Using ctx.path here, not ctx.req.url, so this
+    // check agrees with what the rest of the app sees as "the path" - see
+    // the note below on why that also means this middleware can throw on
+    // a malformed URL before auth logic even runs.
+    if (PUBLIC_PATHS.includes(ctx.path)) {
+        return next();
+    }
+
+    // Node lowercases every incoming header name, so
+    // ctx.headers["Authorization"] would silently always be undefined.
+    const header = ctx.headers.authorization;
+
+    // A duplicated header yields an array rather than a string.
+    if (typeof header !== "string") {
+        unauthorized(ctx);
+    }
+
+    // RFC 9110 defines the auth scheme as case-insensitive, so "bearer",
+    // "Bearer" and "BEARER" are all valid. Split on the first space only,
+    // rather than on all whitespace, so a token is never assumed to be
+    // exactly one word.
+    const spaceIndex = header.indexOf(" ");
+    const scheme = spaceIndex === -1 ? header : header.slice(0, spaceIndex);
+    const token = spaceIndex === -1 ? "" : header.slice(spaceIndex + 1);
+
+    if (scheme.toLowerCase() !== "bearer" || !token) {
+        unauthorized(ctx);
+    }
+
+    const user = FAKE_TOKENS[token];
+
+    // A token that is simply not in the store, and a token that belongs
+    // to a real but disabled user, are different situations server-side
+    // but must produce an identical response. Telling a caller "that
+    // account is disabled" instead of a generic rejection confirms the
+    // token was real, which is exactly what an attacker probing tokens
+    // would want to know.
+    if (!user || !user.active) {
+        unauthorized(ctx);
+    }
+
+    // Throwing HttpError here, rather than writing the response by hand,
+    // means this 401 goes through the exact same pipeline as every other
+    // error Empire produces - same JSON shape, same status handling.
+    ctx.state.user = user;
+
+    return next();
+};
+```
+
 ### Details that must be correct, because they will be copied
 
 Header lookup must be lowercase. Node lowercases every incoming header
@@ -200,7 +266,31 @@ The example server needs three routes to make the effect visible:
 Reading `ctx.state.user` requires narrowing, since `state` is
 `Record<string, unknown>`. Show the narrowing honestly in the handler
 rather than casting with `as`. This is a real ergonomic cost of the
-untyped state bag and the example should not hide it.
+untyped state bag and the example should not hide it:
+
+```typescript
+function isDemoUser(value: unknown): value is DemoUser {
+    return typeof value === "object"
+        && value !== null
+        && "id" in value
+        && "name" in value
+        && "active" in value;
+}
+
+app.get("/me", (ctx) => {
+    const user = ctx.state.user;
+
+    // A cast with "as" would compile even if ctx.state.user were the
+    // wrong shape, or missing entirely - authMiddleware runs on this
+    // path, so this should never actually fail, but the type system has
+    // no way to know that, and the check is what keeps it honest.
+    if (!isDemoUser(user)) {
+        throw new HttpError(500, "Expected an authenticated user on ctx.state");
+    }
+
+    ctx.json(user);
+});
+```
 
 ### The application-wide versus per-route problem
 
