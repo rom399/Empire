@@ -4,7 +4,7 @@ import { RouteMatcher } from "./RouteMatcher";
 import { RouteHandler } from "../types";
 import { Context } from "../http/Context";
 import { suppressResponseBody } from "../http/suppressResponseBody";
-import { HttpError } from "../errors/HttpError";
+import { sendErrorResponse } from "../errors/sendErrorResponse";
 import { BadRequestError } from "../errors/BadRequestError";
 import { ILogger } from "../logging/ILogger";
 
@@ -248,23 +248,7 @@ export class Router {
 
         } catch (err) {
 
-            this.logger.error("Unhandled route error", err);
-
-            if (!ctx.res.headersSent) {
-
-                if (err instanceof HttpError) {
-
-                    ctx.res.statusCode = err.statusCode;
-                    ctx.res.setHeader("Content-Type", "application/json");
-                    ctx.res.end(JSON.stringify({ error: err.message }));
-
-                    return;
-                }
-
-                ctx.res.statusCode = 500;
-                ctx.res.setHeader("Content-Type", "application/json");
-                ctx.res.end(JSON.stringify({ error: "Internal Server Error" }));
-            }
+            sendErrorResponse(ctx.res, err, this.logger, "Unhandled route error");
         }
     }
 
