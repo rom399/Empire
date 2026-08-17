@@ -133,13 +133,39 @@ describe("StaticFileHandler", () => {
             expect(correct).toBe(false);
         });
 
-        it("never serves a file from a prefix-sharing sibling directory", async () => {
+        it("returns 403 when the resolved path escapes the root directory", async () => {
             const handler = new StaticFileHandler({ root });
-            const { ctx, res } = contextFor("/../wwwsecret/secrets.txt");
+            const { ctx, res } = contextFor("/");
 
-            await handler.handle(ctx);
+            // ctx.path normally goes through URL-based normalisation, which
+            // resolves ".." before the handler ever sees it (see the
+            // FINDING 2 comment above) — so "/../wwwsecret/secrets.txt"
+            // requested normally would already be collapsed to
+            // "/wwwsecret/secrets.txt" and never reach this guard at all.
+            // Overriding ctx.path directly bypasses that normalisation, the
+            // only way to exercise the guard itself through handle() rather
+            // than re-testing the boundary math in isolation like the test
+            // above.
+            Object.defineProperty(ctx, "path", {
+                value: "/../wwwsecret/secrets.txt",
+                configurable: true,
+            });
 
-            expect(res.body).not.toContain("TOP SECRET");
+            expect(await handler.handle(ctx)).toBe(true);
+            expect(res.statusCode).toBe(403);
+            expect(res.body).toBe("Forbidden");
+        });
+
+        it("does not serve files outside root even with encoded traversal segments", async () => {
+            const handler = new StaticFileHandler({ root });
+            const { ctx } = contextFor("/%2e%2e/%2e%2e/etc/passwd");
+
+            // Encoded segments normalise the same way plain ones do (see
+            // the FINDING 2 comment above), so this resolves to "/etc/passwd"
+            // before the handler runs, well outside root, and falls through
+            // like the plain-".." case below rather than reaching the 403
+            // guard.
+            expect(await handler.handle(ctx)).toBe(false);
         });
 
         it("serves a legitimate file inside the root", async () => {
@@ -196,6 +222,51 @@ describe("StaticFileHandler", () => {
             const { ctx } = contextFor("/assets-other/index.html");
 
             expect(await handler.handle(ctx)).toBe(false);
+        });
+
+        it("serves a file when the request path starts with the configured prefix", async () => {
+            const handler = new StaticFileHandler({ root, prefix: "/assets" });
+            const { ctx, res } = contextFor("/assets/index.html");
+
+            expect(await handler.handle(ctx)).toBe(true);
+            expect(res.body).toContain("public");
+        });
+
+        it("strips the prefix before resolving the file on disk", async () => {
+            const handler = new StaticFileHandler({ root, prefix: "/assets" });
+            const { ctx, res } = contextFor("/assets/style.css");
+
+            await handler.handle(ctx);
+
+            // root has no assets/ subdirectory, so this only serves the
+            // real root/style.css content if "/assets" was actually
+            // stripped before resolving against root — a stripping bug
+            // would 404 here rather than serve the wrong file.
+            expect(res.body).toBe("body { color: red; }");
+        });
+
+        it("normalises a trailing slash on the configured prefix", async () => {
+            const handler = new StaticFileHandler({ root, prefix: "/assets/" });
+            const { ctx, res } = contextFor("/assets/index.html");
+
+            expect(await handler.handle(ctx)).toBe(true);
+            expect(res.body).toContain("public");
+        });
+
+        it('treats a bare "/" prefix as no prefix at all', async () => {
+            const handler = new StaticFileHandler({ root, prefix: "/" });
+            const { ctx, res } = contextFor("/index.html");
+
+            expect(await handler.handle(ctx)).toBe(true);
+            expect(res.body).toContain("public");
+        });
+
+        it("has no prefix restriction when none is configured, so every path is checked", async () => {
+            const handler = new StaticFileHandler({ root });
+            const { ctx, res } = contextFor("/index.html");
+
+            expect(await handler.handle(ctx)).toBe(true);
+            expect(res.body).toContain("public");
         });
     });
 });

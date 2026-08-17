@@ -8,9 +8,9 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 
 /**
  * Server lifecycle, logger injection (Phase 1), routing method delegation
- * (Phase 3 — PUT/PATCH/DELETE registered via Empire reach the server;
- * GET/POST have no equivalent test here yet, and Router.test.ts already
- * covers the underlying dispatch logic these thinly wrap), middleware
+ * (Phase 3 — GET/POST/PUT/PATCH/DELETE registered via Empire all reach the
+ * server; Router.test.ts already covers the underlying dispatch logic these
+ * thinly wrap), middleware
  * pipeline behavior through Empire's real API — specifically the two
  * cases tests/integration/MiddlewarePipeline.test.ts doesn't already
  * cover (registration order, the double-next() guard, and error mapping
@@ -72,6 +72,28 @@ describe("Empire", () => {
     });
 
     describe("routing", () => {
+
+        it("get() registers a route reachable via the server", async () => {
+            const app = createApp(47015);
+            app.get("/users/1", (ctx) => ctx.json({ id: "1" }));
+
+            await app.start();
+            const response = await fetch("http://127.0.0.1:47015/users/1");
+
+            expect(response.status).toBe(200);
+            expect(await response.json()).toEqual({ id: "1" });
+        });
+
+        it("post() registers a route reachable via the server", async () => {
+            const app = createApp(47016);
+            app.post("/users", (ctx) => ctx.status(201).json({ created: true }));
+
+            await app.start();
+            const response = await fetch("http://127.0.0.1:47016/users", { method: "POST" });
+
+            expect(response.status).toBe(201);
+            expect(await response.json()).toEqual({ created: true });
+        });
 
         it("put() registers a route reachable via the server", async () => {
             const app = createApp(47007);
