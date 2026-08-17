@@ -138,6 +138,34 @@ describe("Context", () => {
         });
     });
 
+    describe("state", () => {
+
+        it("defaults to an empty object", () => {
+            const req = createMockRequest();
+            const ctx = new Context(req, createMockResponse());
+
+            expect(ctx.state).toEqual({});
+        });
+
+        it("holds a value written to it, readable back by a later reader", () => {
+            const req = createMockRequest();
+            const ctx = new Context(req, createMockResponse());
+
+            ctx.state.user = { id: "1", name: "Alice" };
+
+            expect(ctx.state.user).toEqual({ id: "1", name: "Alice" });
+        });
+
+        it("is a fresh object per Context instance, not shared across requests", () => {
+            const first = new Context(createMockRequest(), createMockResponse());
+            const second = new Context(createMockRequest(), createMockResponse());
+
+            first.state.user = { id: "1", name: "Alice" };
+
+            expect(second.state.user).toBeUndefined();
+        });
+    });
+
     describe("body parsing", () => {
 
         it("body reads the full request stream as a string", async () => {

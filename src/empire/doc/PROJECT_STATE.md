@@ -149,6 +149,12 @@ Resolved:
 - `ctx.download(path, filename?)` — force download via Content-Disposition
 - `ctx.cookie(name, value, options?)`, `ctx.clearCookie(name)` — cookies via `CookieOptions`
 
+Post-v1 additions:
+- `ctx.state: Record<string, unknown>` - per-request bag for middleware to
+  attach data (e.g. an authenticated user) for downstream middleware and
+  route handlers to read; added as a prerequisite for
+  `doc/features/EXAMPLE_AUTHENTICATION_MIDDLEWARE.md`
+
 Post-v1 only (requires DI):
 - `ctx.services` — `ServiceProvider` per request
 

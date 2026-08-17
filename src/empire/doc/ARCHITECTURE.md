@@ -266,6 +266,7 @@ Phase 10 (Dependency Injection) is complete.
 | `query` | `URLSearchParams` | Parsed query parameters |
 | `headers` | `IncomingHttpHeaders` | Incoming request headers |
 | `params` | `Record<string, string>` | Route parameters from `:id` segments |
+| `state` | `Record<string, unknown>` | Post-v1 addition. Per-request bag for middleware to attach data (e.g. an authenticated user) for downstream middleware and route handlers to read. Untyped by design - reading a value back requires narrowing, not casting with `as` |
 | `ipAddress` | `string` | Client IP — handles `x-forwarded-for` and IPv6 |
 | `userAgent` | `string` | User-Agent header shorthand, empty string when absent |
 | `contentType` | `string` | Content-Type without parameters (strips `; charset=...`) |

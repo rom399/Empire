@@ -16,6 +16,16 @@ export class Context {
     public readonly res: http.ServerResponse;
     public params: Record<string, string>;
 
+    /**
+     * A per-request bag for middleware to attach data to for downstream
+     * middleware and route handlers to read, e.g. an authenticated user
+     * resolved by an auth middleware. Untyped by design, since Context
+     * has no way to know what any given application will store here -
+     * reading a value back requires narrowing it to the expected shape
+     * rather than casting with `as`.
+     */
+    public readonly state: Record<string, unknown> = {};
+
     private readonly maxBodySize: number;
     private bodyPromise?: Promise<string>;
 

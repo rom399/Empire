@@ -75,6 +75,17 @@ verified directly against the source:
 * ctx.services — deliberately deferred, added after Phase 10 Dependency
   Injection is complete
 
+**Update - ctx.state added:**
+
+`ctx.state: Record<string, unknown>` - a per-request bag for middleware to
+attach data to (e.g. an authenticated user) for downstream middleware and
+route handlers to read. Added as a prerequisite for
+`doc/features/EXAMPLE_AUTHENTICATION_MIDDLEWARE.md`, per the additive-only
+policy stated above: a new public field, no existing signature changed.
+Deliberately untyped (`Record<string, unknown>`) since `Context` has no
+way to know what any given application stores here - reading a value
+back requires narrowing, not casting with `as`.
+
 Files affected:
 * `src/http/Context.ts` — all additions
 * `src/http/CookieOptions.ts` — options type for `ctx.cookie()`
