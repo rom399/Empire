@@ -186,8 +186,7 @@ export class Context {
     public addHeaders(headers: IncomingHttpHeaders | Record<string, string>): this {
         for (const [name, value] of Object.entries(headers)) {
             if (value !== undefined && value !== null) {
-                // IncomingHttpHeaders may have string | string[] values; cast to any
-                this.res.setHeader(name, value as any);
+                this.res.setHeader(name, value as number | string | readonly string[]);
             }
         }
 
