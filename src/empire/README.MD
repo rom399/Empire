@@ -276,6 +276,48 @@ response and no error body.
 See `examples/05-error-handling` for a runnable version of all of the above,
 including the always-500 `/crash` route.
 
+## Authentication
+
+Empire does not ship authentication middleware. The framework owns the
+mechanical parts every application needs identically - parsing headers,
+rejecting malformed input, producing a correctly formed error response -
+but it cannot own the decision about what counts as a valid credential,
+since only the application knows about its own users, token format and
+storage. Writing this yourself is a small amount of code: middleware that
+throws `HttpError(401)` already produces a correct JSON response through
+the pipeline described above.
+
+```ts
+const authMiddleware: Middleware = (ctx, next) => {
+    const user = lookUpUser(ctx.headers.authorization);
+
+    if (!user) {
+        throw new HttpError(401, "Invalid or missing credentials");
+    }
+
+    ctx.state.user = user; // hand the identity to downstream handlers
+    return next();
+};
+```
+
+`ctx.state` is a `Record<string, unknown>` bag for exactly this: attaching
+data in a middleware for a route handler to read later. Reading it back
+requires narrowing the value yourself, since `state` has no way to know
+what any given application stores there.
+
+Two sharp edges worth knowing. First, Empire does not yet support
+per-route middleware, so an `app.use()`-registered auth middleware runs
+for every request; excluding a path (e.g. a health check) means having
+the middleware itself check `ctx.path` and skip a list of public paths.
+Second, a real implementation needs more than this shape covers -
+credentials stored hashed rather than in plain text, token expiry, and
+constant-time comparison to avoid timing attacks, none of which the
+framework can provide for you.
+
+See `examples/08-authentication` for a complete worked example, including
+the header parsing details (case-insensitive Bearer scheme matching,
+`WWW-Authenticate` on the 401) that are easy to get wrong.
+
 ## Logging
 
 Empire provides a logging abstraction.
@@ -356,6 +398,7 @@ npx tsx examples/02-routing/server.ts
 | `05-error-handling` | 8005 | `HttpError` and `BadRequestError` thrown from route handlers, and an uncaught error on `/crash` becoming a `500` |
 | `06-react-app` | 8006 | A real React + React Router app served with `spaFallback: true`, alongside a real API route that takes priority over the fallback |
 | `07-body-size-limit` | 8007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
+| `08-authentication` | 8008 | A worked example of writing your own auth middleware: Bearer token parsing, `WWW-Authenticate` on rejection, and handing an identity to route handlers via `ctx.state` |
 
 ## Project Structure
 
@@ -378,7 +421,8 @@ empire/
 │   ├── 04-static-files/
 │   ├── 05-error-handling/
 │   ├── 06-react-app/
-│   └── 07-body-size-limit/
+│   ├── 07-body-size-limit/
+│   └── 08-authentication/
 ├── tests/
 │   ├── unit/
 │   ├── integration/
