@@ -5,6 +5,7 @@ import { RouteHandler } from "../types";
 import { Context } from "../http/Context";
 import { suppressResponseBody } from "../http/suppressResponseBody";
 import { HttpError } from "../errors/HttpError";
+import { BadRequestError } from "../errors/BadRequestError";
 import { ILogger } from "../logging/ILogger";
 
 /**
@@ -116,6 +117,8 @@ export class Router {
         const isHead = req.method === "HEAD";
         const matchMethod = isHead ? "GET" : req.method;
 
+        this.assertValidEncoding(path);
+
         const { route, params, allowedMethods } = this.findRoute(path, matchMethod);
 
         if (route) {
@@ -210,6 +213,26 @@ export class Router {
         }
 
         return { params: {}, allowedMethods };
+    }
+
+    /**
+     * Confirms the request path's percent-encoding is well-formed before
+     * any matching happens, converting a malformed sequence (e.g. "%zz")
+     * into a 400 instead of letting it surface as an uncaught error deeper
+     * in the matching path. Runs unconditionally, before findRoute() is
+     * even called, so the outcome for a malformed path no longer depends
+     * on whether any routes happen to be registered - previously, a
+     * malformed segment only threw when a registered route's segment
+     * count matched closely enough for RouteMatcher to attempt decoding
+     * it, so the same malformed input could 500 or 404 depending on
+     * unrelated server configuration.
+     */
+    private assertValidEncoding(path: string): void {
+        try {
+            decodeURIComponent(path);
+        } catch {
+            throw new BadRequestError("Malformed request path");
+        }
     }
 
     /**

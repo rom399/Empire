@@ -38,8 +38,19 @@ export class Context {
         return this.req.method ?? "GET";
     }
 
+    /**
+     * The decoded request path, without the query string.
+     * Throws BadRequestError rather than a raw URIError when the path
+     * contains malformed percent-encoding (e.g. "%zz"), so this is always
+     * a client error (400), not an unhandled exception that surfaces as
+     * a generic 500 wherever this getter happens to be read from.
+     */
     public get path(): string {
-        return decodeURIComponent(this.url.pathname);
+        try {
+            return decodeURIComponent(this.url.pathname);
+        } catch {
+            throw new BadRequestError("Malformed request path");
+        }
     }
 
     public get query(): URLSearchParams {
