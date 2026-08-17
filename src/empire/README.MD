@@ -351,7 +351,7 @@ npx tsx examples/02-routing/server.ts
 |---|---|---|
 | `01-basic-server` | 8001 | A minimal server: an HTML route, a JSON health check, and a POST route that echoes its JSON body back |
 | `02-routing` | 8002 | A full REST-style user API: route params, query strings, a multi-param nested route, and a literal route registered ahead of an overlapping param route |
-| `03-middleware` | 8003 | The built-in `LoggerMiddleware` and `AuthMiddleware` plus a custom timing middleware, showing pipeline ordering |
+| `03-middleware` | 8003 | The built-in `createLoggerMiddleware(logger)`, a short-circuiting auth-header check, and a custom timing middleware, showing pipeline ordering |
 | `04-static-files` | 8004 | An unprefixed static folder and a second one mounted under a URL prefix, served side by side |
 | `05-error-handling` | 8005 | `HttpError` and `BadRequestError` thrown from route handlers, and an uncaught error on `/crash` becoming a `500` |
 | `06-react-app` | 8006 | A real React + React Router app served with `spaFallback: true`, alongside a real API route that takes priority over the fallback |
@@ -366,7 +366,7 @@ empire/
 │   ├── types.ts
 │   ├── http/          Context, CookieOptions
 │   ├── routing/        Route, RouteMatch, RouteMatcher, Router
-│   ├── middleware/      LoggerMiddleware, AuthMiddleware
+│   ├── middleware/      LoggerMiddleware
 │   ├── static/          MimeTypes, StaticFileHandler and its option types
 │   ├── errors/          HttpError, BadRequestError, HttpErrorOptions
 │   ├── logging/         ILogger, ConsoleLogger

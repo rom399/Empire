@@ -42,8 +42,7 @@ empire/
 │   │   ├── ILogger.ts              # Logger interface
 │   │   └── ConsoleLogger.ts        # Default console implementation
 │   ├── middleware/
-│   │   ├── LoggerMiddleware.ts     # Logs method + URL per request
-│   │   └── AuthMiddleware.ts       # Auth stub — always authorized
+│   │   └── LoggerMiddleware.ts     # createLoggerMiddleware(logger) factory
 │   ├── errors/
 │   │   ├── HttpError.ts            # Base HTTP error class
 │   │   └── BadRequestError.ts      # 400 error shorthand
@@ -506,8 +505,7 @@ itself use this signature.
 
 | File | Export | Behaviour |
 |------|--------|-----------|
-| `src/middleware/LoggerMiddleware.ts` | `LoggerMiddleware` | Logs `METHOD /path` to console |
-| `src/middleware/AuthMiddleware.ts` | `AuthMiddleware` | Stub — always authorized |
+| `src/middleware/LoggerMiddleware.ts` | `createLoggerMiddleware(logger)` | Returns a middleware that logs `METHOD /path` through the given `ILogger` |
 
 ---
 
@@ -566,7 +564,6 @@ interface EmpireOptions {
 |-------|--------|------|
 | Only `GET` and `POST` (and `HEAD`, auto-dispatched) implemented | Can't build a full REST API yet | `PUT`/`PATCH`/`DELETE`/`OPTIONS` — PLAN.md Phase 3 Remaining |
 | Only one SPA fallback per server | Can't serve two different single-page apps from one `Empire` instance | Not currently needed; `Router.setFallback()` would need to become a list with its own matching logic if this comes up |
-| `LoggerMiddleware`/`AuthMiddleware` call `next()` without awaiting or returning it (FINDING 5) | A downstream rejection becomes an unhandled rejection instead of propagating; these ship as the README's example middleware | PLAN.md Phase 9.3 |
 | `ctx.body()` has no size cap (FINDING 7) | A large request body is buffered fully into memory instead of being rejected with 413 | PLAN.md Phase 9.3 |
 | `sendFile()` only resolves on the response's `"finish"` event (FINDING 8) | A client aborting mid-download leaves the promise unsettled and leaks the read stream/file descriptor | PLAN.md Phase 9.3 |
 | Static files never check `req.method` (FINDING 9) | A HEAD request to a static file gets a full body — `Router.discardBody()` only covers routed requests | PLAN.md Phase 9.3 |

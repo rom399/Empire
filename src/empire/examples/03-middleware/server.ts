@@ -2,9 +2,10 @@
  * 03 - Middleware
  *
  * Demonstrates Empire's middleware pipeline with:
- * - Registering LoggerMiddleware and AuthMiddleware via app.use()
+ * - Registering the built-in createLoggerMiddleware(logger) via app.use()
+ * - A middleware that short circuits the pipeline when a condition fails
  * - Writing a custom request timing middleware
- * - Middleware ordering — runs top to bottom before any route handler
+ * - Middleware ordering: runs top to bottom before any route handler
  *
  * Run: npx tsx examples/03-middleware/server.ts
  * Open: http://localhost:8003
@@ -12,14 +13,26 @@
 
 import process from "process";
 import { Empire } from "../../src/Empire";
-import { LoggerMiddleware } from "../../src/middleware/LoggerMiddleware";
-import { AuthMiddleware } from "../../src/middleware/AuthMiddleware";
+import { createLoggerMiddleware } from "../../src/middleware/LoggerMiddleware";
 import { Middleware } from "../../src/types";
 
 const app = new Empire({
     host: "localhost",
     port: 8003,
 });
+
+// Demonstrates a middleware that short circuits the pipeline: when the
+// condition fails it never calls next(), so no downstream middleware or
+// route handler runs. This only checks that the header is present, not
+// that it carries a valid credential, so it is not real authentication.
+const requireAuthHeaderMiddleware: Middleware = (ctx, next) => {
+    if (!ctx.headers.authorization) {
+        ctx.status(401).text("Unauthorized");
+        return;
+    }
+
+    return next();
+};
 
 const timingMiddleware: Middleware = async (ctx, next) => {
     const startedAt = Date.now();
@@ -31,8 +44,8 @@ const timingMiddleware: Middleware = async (ctx, next) => {
     console.log(`Request completed in ${elapsed}ms`);
 };
 
-app.use(LoggerMiddleware);
-app.use(AuthMiddleware);
+app.use(createLoggerMiddleware(app.logger));
+app.use(requireAuthHeaderMiddleware);
 app.use(timingMiddleware);
 
 app.get("/", (ctx) => {

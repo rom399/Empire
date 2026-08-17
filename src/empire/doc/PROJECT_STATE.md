@@ -109,8 +109,8 @@ Resolved:
 - `Middleware` type definition
 - `app.use()` registration
 - Async middleware pipeline with `await next()`
-- `LoggerMiddleware` — logs method and URL
-- `AuthMiddleware` — stub, always authorized
+- `createLoggerMiddleware(logger)` - factory returning a middleware that
+  logs method and URL through the given `ILogger`
 
 ### Phase 3 — Routing ✅ (all 7 methods; route groups/wildcards/optional params/trailing-slash still open)
 - Route table with registration order matching, owned by `Router` (`src/routing/`)

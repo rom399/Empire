@@ -315,7 +315,6 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * Middleware execution pipeline
 * Async middleware support
 * LoggerMiddleware — logs method and URL for every request
-* AuthMiddleware — stub, ready for real auth logic
 * Context-based signature — `(ctx, next) => void | Promise<void>` — migration
   complete, see Priority section item 1
 
@@ -526,7 +525,7 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * Project renamed from rom-server to empire
 * src/http/ — Context lives here
 * src/errors/ — HttpError, BadRequestError
-* src/middleware/ — PascalCase filenames (AuthMiddleware, LoggerMiddleware)
+* src/middleware/ — PascalCase filenames (LoggerMiddleware)
 * src/static/ — MimeTypes, StaticFileHandler, StaticFileOptions
 * src/routing/ — Route, RouteMatch, RouteMatcher, Router
 * src/di/ — placeholder directory for Phase 10

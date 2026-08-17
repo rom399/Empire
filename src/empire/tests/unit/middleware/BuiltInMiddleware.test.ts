@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { LoggerMiddleware } from "../../../src/middleware/LoggerMiddleware";
-import { AuthMiddleware } from "../../../src/middleware/AuthMiddleware";
+import { createLoggerMiddleware } from "../../../src/middleware/LoggerMiddleware";
 import { Context } from "../../../src/http/Context";
 import { createMockRequest, createMockResponse } from "../../fixtures/http/MockHttp";
+import { TestLogger } from "../../fixtures/services/TestLogger";
 
 /**
- * FINDING 5 — both shipped middleware call next() without awaiting it, so a
- * rejection downstream becomes an unhandled rejection and the pipeline
- * resolves before downstream work completes. They are also the examples
- * people will copy from the README.
+ * FINDING 5 — the shipped LoggerMiddleware called next() without awaiting
+ * it, so a rejection downstream became an unhandled rejection and the
+ * pipeline resolved before downstream work completed. It is also the
+ * example people will copy from the README.
  */
 describe("Built-in middleware", () => {
 
@@ -20,8 +20,9 @@ describe("Built-in middleware", () => {
 
     it("LoggerMiddleware awaits next()", async () => {
         let downstreamCompleted = false;
+        const loggerMiddleware = createLoggerMiddleware(new TestLogger());
 
-        await LoggerMiddleware(ctxFor(), async () => {
+        await loggerMiddleware(ctxFor(), async () => {
             await new Promise((r) => setTimeout(r, 10));
             downstreamCompleted = true;
         });
@@ -30,29 +31,21 @@ describe("Built-in middleware", () => {
     });
 
     it("LoggerMiddleware propagates a downstream rejection", async () => {
+        const loggerMiddleware = createLoggerMiddleware(new TestLogger());
+
         await expect(
-            LoggerMiddleware(ctxFor(), async () => {
+            loggerMiddleware(ctxFor(), async () => {
                 throw new Error("downstream failure");
             })
         ).rejects.toThrow("downstream failure");
     });
 
-    it("AuthMiddleware awaits next()", async () => {
-        let downstreamCompleted = false;
+    it("LoggerMiddleware logs through the injected logger, not console", async () => {
+        const logger = new TestLogger();
+        const loggerMiddleware = createLoggerMiddleware(logger);
 
-        await AuthMiddleware(ctxFor(), async () => {
-            await new Promise((r) => setTimeout(r, 10));
-            downstreamCompleted = true;
-        });
+        await loggerMiddleware(ctxFor(), async () => {});
 
-        expect(downstreamCompleted).toBe(true);
-    });
-
-    it("AuthMiddleware propagates a downstream rejection", async () => {
-        await expect(
-            AuthMiddleware(ctxFor(), async () => {
-                throw new Error("downstream failure");
-            })
-        ).rejects.toThrow("downstream failure");
+        expect(logger.infoMessages).toEqual(["GET /"]);
     });
 });

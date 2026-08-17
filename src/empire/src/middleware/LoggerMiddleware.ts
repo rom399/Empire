@@ -1,6 +1,9 @@
 import { Middleware } from "../types";
+import { ILogger } from "../logging/ILogger";
 
-export const LoggerMiddleware: Middleware = (ctx, next) => {
-    console.log(`${ctx.method} ${ctx.path}`);
-    return next();
-};
+export function createLoggerMiddleware(logger: ILogger): Middleware {
+    return (ctx, next) => {
+        logger.info(`${ctx.method} ${ctx.path}`);
+        return next();
+    };
+}
