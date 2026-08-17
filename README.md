@@ -79,4 +79,4 @@ Empire is under active development and is not published to npm. The API is not y
 
 ## License
 
-ISC, per `src/empire/package.json`. No standalone `LICENSE` file is currently included in this repository.
+MIT. See [LICENSE](LICENSE).

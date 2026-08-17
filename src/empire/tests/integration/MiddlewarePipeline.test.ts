@@ -10,8 +10,8 @@ import { TestLogger } from "../fixtures/services/TestLogger";
  * FINDING 4 — `index` is shared across the next() closure, so calling next()
  * twice advances the pipeline twice instead of erroring.
  *
- * FINDING 5 — the shipped LoggerMiddleware and AuthMiddleware call next()
- * without awaiting it, so the pipeline resolves before downstream work runs.
+ * FINDING 5 — the shipped LoggerMiddleware called next() without awaiting
+ * it, so the pipeline resolved before downstream work ran.
  */
 describe("Middleware pipeline", () => {
 

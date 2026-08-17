@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { Context } from "../http/Context";
+import { streamFileToResponse } from "../http/streamFile";
 import { MimeTypes } from "./MimeTypes";
 import { StaticFileOptions } from "./StaticFileOptions";
 
@@ -82,11 +83,10 @@ export class StaticFileHandler {
     }
 
     /**
-     * Streams a file to the response rather than reading it fully into
-     * memory first — necessary for large bundles and assets. For a HEAD
-     * request, sets the same headers a GET would but skips opening a read
-     * stream entirely (RFC 9110 §9.3.2) — the file's contents are never
-     * needed, not just discarded after reading.
+     * Sets the response headers for a file, then streams it - except for
+     * a HEAD request, where it sets the same headers a GET would but skips
+     * opening a read stream entirely (RFC 9110 §9.3.2), since the file's
+     * contents are never needed, not just discarded after reading.
      */
     private async sendFile(ctx: Context, filePath: string): Promise<void> {
 
@@ -101,41 +101,7 @@ export class StaticFileHandler {
             return;
         }
 
-        await new Promise<void>((resolve, reject) => {
-            const stream = fs.createReadStream(filePath);
-
-            const cleanup = () => {
-                stream.destroy();
-                stream.off("error", onError);
-                ctx.res.off("finish", onFinish);
-                ctx.res.off("close", onClose);
-            };
-
-            const onFinish = () => {
-                cleanup();
-                resolve();
-            };
-
-            // The client disconnecting mid-stream never fires "finish" —
-            // only "close". Settling here instead of leaving the promise
-            // pending forever, and destroying the still-open read stream,
-            // is what stops an aborted download from hanging and leaking a
-            // file descriptor.
-            const onClose = () => {
-                cleanup();
-                resolve();
-            };
-
-            const onError = (err: Error) => {
-                cleanup();
-                reject(err);
-            };
-
-            stream.on("error", onError);
-            ctx.res.on("finish", onFinish);
-            ctx.res.on("close", onClose);
-            stream.pipe(ctx.res);
-        });
+        await streamFileToResponse(ctx.res, filePath);
     }
 
     /**

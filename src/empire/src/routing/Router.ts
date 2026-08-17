@@ -3,7 +3,9 @@ import { Route } from "./Route";
 import { RouteMatcher } from "./RouteMatcher";
 import { RouteHandler } from "../types";
 import { Context } from "../http/Context";
-import { HttpError } from "../errors/HttpError";
+import { suppressResponseBody } from "../http/suppressResponseBody";
+import { sendErrorResponse } from "../errors/sendErrorResponse";
+import { BadRequestError } from "../errors/BadRequestError";
 import { ILogger } from "../logging/ILogger";
 
 /**
@@ -97,20 +99,13 @@ export class Router {
     }
 
     /**
-     * Matches the incoming request against registered routes and
-     * invokes the first matching handler. HEAD requests are matched
-     * against GET routes and dispatched to the same handler, with the
-     * response body discarded before it reaches the client (RFC 9110
-     * §9.3.2). An OPTIONS request matches an explicitly registered
-     * OPTIONS handler exactly like any other method; if none is
-     * registered for the path but other methods are, it instead gets an
-     * automatic 204 with an Allow header (RFC 9110 §9.3.7) rather than
-     * falling into the 405 case below. Otherwise falls back to the
-     * registered fallback handler (GET requests only), a 405 when the
-     * path matches a route registered under a different method (RFC 9110
-     * §9.2.2 — a matched resource that doesn't support the request
-     * method must respond 405 with an Allow header, not 404), or a 404
-     * when nothing matches the path at all.
+     * Matches the incoming request against registered routes and invokes
+     * the first matching handler, then works through the fallback
+     * responses in order: an automatic OPTIONS response, a 405 for a path
+     * that matches under a different method (RFC 9110 §9.2.2 - a matched
+     * resource that doesn't support the request method must respond 405
+     * with an Allow header, not 404), the registered fallback handler
+     * (GET requests only), or a 404 when nothing matches the path at all.
      */
     public async handle(
         req: http.IncomingMessage,
@@ -121,33 +116,19 @@ export class Router {
         const path = req.url?.split("?")[0] ?? "/";
         const isHead = req.method === "HEAD";
         const matchMethod = isHead ? "GET" : req.method;
-        const allowedMethods = new Set<string>();
 
-        for (const route of this.routes) {
+        this.assertValidEncoding(path);
 
-            const match = this.matcher.match(route.path, path);
+        const { route, params, allowedMethods } = this.findRoute(path, matchMethod);
 
-            if (!match.matched) {
-                continue;
-            }
-
-            allowedMethods.add(route.method);
-
-            if (route.method === "GET") {
-                // HEAD is implicitly supported wherever GET is
-                allowedMethods.add("HEAD");
-            }
-
-            if (route.method !== matchMethod) {
-                continue;
-            }
+        if (route) {
 
             if (isHead) {
-                this.discardBody(res);
+                suppressResponseBody(res);
             }
 
             const requestCtx = ctx ?? new Context(req, res);
-            requestCtx.params = match.params;
+            requestCtx.params = params;
             await this.invokeHandler(requestCtx, route.handler);
 
             return;
@@ -157,7 +138,8 @@ export class Router {
 
             // OPTIONS is implicitly supported wherever any other method is
             // registered, even without an explicit handler — RFC 9110
-            // §9.3.7 — so it belongs in Allow the same way HEAD does above.
+            // §9.3.7 - so it belongs in Allow the same way HEAD does in
+            // findRoute() above.
             allowedMethods.add("OPTIONS");
 
             if (req.method === "OPTIONS") {
@@ -187,17 +169,70 @@ export class Router {
     }
 
     /**
-     * Makes a response silently drop any body written to it while still
-     * setting status and headers normally. Used for HEAD requests: the
-     * matched GET handler runs unmodified (so Content-Type and
-     * Content-Length reflect exactly what a GET would have sent), but the
-     * actual bytes never reach the client, per RFC 9110 §9.3.2.
+     * Searches registered routes for one matching the given path and
+     * method. HEAD requests are matched against GET routes (the caller
+     * passes "GET" as method for a HEAD request), since RFC 9110 §9.3.2
+     * requires HEAD to behave identically to GET but with no response
+     * body - dispatching to the same handler and discarding the body it
+     * writes is what `handle()` does with the returned route.
+     *
+     * Also accumulates every method registered for a path that matches by
+     * path alone, regardless of whether it matches by method too,
+     * including the implicit HEAD wherever GET is registered, so `handle()`
+     * can build a 405/OPTIONS Allow header even when nothing matches by
+     * method. This accumulation stops as soon as a full match is found,
+     * since first-registered-wins means nothing after it would matter.
      */
-    private discardBody(res: http.ServerResponse): void {
-        const originalEnd = res.end.bind(res);
+    private findRoute(
+        path: string,
+        method: string | undefined
+    ): { route?: Route; params: Record<string, string>; allowedMethods: Set<string> } {
 
-        res.write = (() => true) as typeof res.write;
-        res.end = ((..._args: unknown[]) => originalEnd()) as typeof res.end;
+        const allowedMethods = new Set<string>();
+
+        for (const route of this.routes) {
+
+            const match = this.matcher.match(route.path, path);
+
+            if (!match.matched) {
+                continue;
+            }
+
+            allowedMethods.add(route.method);
+
+            if (route.method === "GET") {
+                // HEAD is implicitly supported wherever GET is
+                allowedMethods.add("HEAD");
+            }
+
+            if (route.method !== method) {
+                continue;
+            }
+
+            return { route, params: match.params, allowedMethods };
+        }
+
+        return { params: {}, allowedMethods };
+    }
+
+    /**
+     * Confirms the request path's percent-encoding is well-formed before
+     * any matching happens, converting a malformed sequence (e.g. "%zz")
+     * into a 400 instead of letting it surface as an uncaught error deeper
+     * in the matching path. Runs unconditionally, before findRoute() is
+     * even called, so the outcome for a malformed path no longer depends
+     * on whether any routes happen to be registered - previously, a
+     * malformed segment only threw when a registered route's segment
+     * count matched closely enough for RouteMatcher to attempt decoding
+     * it, so the same malformed input could 500 or 404 depending on
+     * unrelated server configuration.
+     */
+    private assertValidEncoding(path: string): void {
+        try {
+            decodeURIComponent(path);
+        } catch {
+            throw new BadRequestError("Malformed request path");
+        }
     }
 
     /**
@@ -213,23 +248,7 @@ export class Router {
 
         } catch (err) {
 
-            this.logger.error("Unhandled route error", err);
-
-            if (!ctx.res.headersSent) {
-
-                if (err instanceof HttpError) {
-
-                    ctx.res.statusCode = err.statusCode;
-                    ctx.res.setHeader("Content-Type", "application/json");
-                    ctx.res.end(JSON.stringify({ error: err.message }));
-
-                    return;
-                }
-
-                ctx.res.statusCode = 500;
-                ctx.res.setHeader("Content-Type", "application/json");
-                ctx.res.end(JSON.stringify({ error: "Internal Server Error" }));
-            }
+            sendErrorResponse(ctx.res, err, this.logger, "Unhandled route error");
         }
     }
 

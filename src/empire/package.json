@@ -1,16 +1,15 @@
 {
   "name": "empire",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Empire is a lightweight TypeScript web framework built from scratch using Node.js.",
   "scripts": {
     "test": "vitest run",
     "start": "tsx examples/01-basic-server/server.ts",
     "dev": "tsx watch examples/01-basic-server/server.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["typescript", "http", "web-framework", "middleware"],
+  "author": "Roman Hanousek <rom399@gmail.com>",
+  "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
     "@types/node": "^26.2.0",

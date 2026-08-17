@@ -5,6 +5,7 @@ import { BadRequestError } from "../errors/BadRequestError";
 import { HttpError } from "../errors/HttpError";
 import { MimeTypes } from "../static/MimeTypes";
 import { CookieOptions } from "./CookieOptions";
+import { streamFileToResponse } from "./streamFile";
 
 export class Context {
     private static readonly DEFAULT_REDIRECT_STATUS = 302;
@@ -38,8 +39,19 @@ export class Context {
         return this.req.method ?? "GET";
     }
 
+    /**
+     * The decoded request path, without the query string.
+     * Throws BadRequestError rather than a raw URIError when the path
+     * contains malformed percent-encoding (e.g. "%zz"), so this is always
+     * a client error (400), not an unhandled exception that surfaces as
+     * a generic 500 wherever this getter happens to be read from.
+     */
     public get path(): string {
-        return decodeURIComponent(this.url.pathname);
+        try {
+            return decodeURIComponent(this.url.pathname);
+        } catch {
+            throw new BadRequestError("Malformed request path");
+        }
     }
 
     public get query(): URLSearchParams {
@@ -174,8 +186,7 @@ export class Context {
     public addHeaders(headers: IncomingHttpHeaders | Record<string, string>): this {
         for (const [name, value] of Object.entries(headers)) {
             if (value !== undefined && value !== null) {
-                // IncomingHttpHeaders may have string | string[] values; cast to any
-                this.res.setHeader(name, value as any);
+                this.res.setHeader(name, value as number | string | readonly string[]);
             }
         }
 
@@ -323,41 +334,6 @@ export class Context {
         this.res.setHeader("Content-Type", MimeTypes.getType(path.extname(filePath)));
         this.res.setHeader("Content-Length", stats.size);
 
-        // Stream rather than read into memory — files may be large
-        await new Promise<void>((resolve, reject) => {
-            const stream = fs.createReadStream(filePath);
-
-            const cleanup = () => {
-                stream.destroy();
-                stream.off("error", onError);
-                this.res.off("finish", onFinish);
-                this.res.off("close", onClose);
-            };
-
-            const onFinish = () => {
-                cleanup();
-                resolve();
-            };
-
-            // The client disconnecting mid-stream never fires "finish" —
-            // only "close". Settling here instead of leaving the promise
-            // pending forever, and destroying the still-open read stream,
-            // is what stops an aborted download from hanging the handler
-            // and leaking a file descriptor.
-            const onClose = () => {
-                cleanup();
-                resolve();
-            };
-
-            const onError = (err: Error) => {
-                cleanup();
-                reject(err);
-            };
-
-            stream.on("error", onError);
-            this.res.on("finish", onFinish);
-            this.res.on("close", onClose);
-            stream.pipe(this.res);
-        });
+        await streamFileToResponse(this.res, filePath);
     }
 }

@@ -33,6 +33,13 @@ describe("Context", () => {
             expect(ctx.path).toBe("/users/42");
         });
 
+        it("path throws BadRequestError, not a raw URIError, for malformed percent-encoding", () => {
+            const req = createMockRequest({ url: "/users/%zz" });
+            const ctx = new Context(req, createMockResponse());
+
+            expect(() => ctx.path).toThrow(BadRequestError);
+        });
+
         it("query returns parsed query parameters", () => {
             const req = createMockRequest({ url: "/search?q=empire&page=2" });
             const ctx = new Context(req, createMockResponse());
