@@ -561,18 +561,14 @@ interface EmpireOptions {
 
 ## Known Architectural Issues
 
+This table previously listed nine items; eight turned out to already be
+resolved (verified directly against the source below, not assumed) and
+have been moved into the Resolved list. Only one genuinely open item
+remains:
+
 | Issue | Impact | Plan |
 |-------|--------|------|
-| Only `GET` and `POST` (and `HEAD`, auto-dispatched) implemented | Can't build a full REST API yet | `PUT`/`PATCH`/`DELETE`/`OPTIONS` — PLAN.md Phase 3 Remaining |
 | Only one SPA fallback per server | Can't serve two different single-page apps from one `Empire` instance | Not currently needed; `Router.setFallback()` would need to become a list with its own matching logic if this comes up |
-| `ctx.body()` has no size cap (FINDING 7) | A large request body is buffered fully into memory instead of being rejected with 413 | PLAN.md Phase 9.3 |
-| `sendFile()` only resolves on the response's `"finish"` event (FINDING 8) | A client aborting mid-download leaves the promise unsettled and leaks the read stream/file descriptor | PLAN.md Phase 9.3 |
-| Static files never check `req.method` (FINDING 9) | A HEAD request to a static file gets a full body — `Router.discardBody()` only covers routed requests | PLAN.md Phase 9.3 |
-| Route params are never URL-decoded (FINDING 10) | `RouteMatcher` (raw `req.url`) and `Context.path` (decoded `URL.pathname`) disagree on the request path | PLAN.md Phase 9.3 |
-| No literal-over-parameter route precedence (FINDING 11) | First-registered-wins is undocumented and easy to get wrong, e.g. `/users/:id` registered before `/users/new` swallows it | PLAN.md Phase 9.3 |
-| `RouteMatcher` filters empty path segments (FINDING 12) | `//users//1` matches `/users/:id` — no canonical URL form | PLAN.md Phase 9.3 |
-| `HttpError` has no `code`/`retryable`, and `.name` isn't set (FINDING 13) | Serialises as generic `"Error"`; no machine-readable error code to key off of | PLAN.md Phase 9.3 |
-| Static file path-traversal guard is a bare `startsWith(root)` (FINDING 2) | Admits a sibling directory whose name shares the root's prefix. Not currently exploitable — `URL.pathname` normalises `..` first — but it's the only remaining defence if that changes | PLAN.md Phase 9.3 |
 
 **Resolved** (kept here for history — see `doc/PROJECT_STATE.md` for current status):
 - ~~Routing lived in `Empire.ts`~~ — extracted to `src/routing/Router.ts`
@@ -586,3 +582,12 @@ interface EmpireOptions {
 - ~~No error handling around the middleware pipeline (FINDING 3)~~ — `Empire.handleRequest()` now catches and maps errors, see PLAN.md Phase 9.3
 - ~~`next()` not guarded against double invocation (FINDING 4)~~ — recursive `dispatch()` with a one-shot `next()`, see PLAN.md Phase 9.3
 - ~~`ctx.body()` not cached (FINDING 6)~~ — memoized as a promise, see PLAN.md Phase 9.3
+- ~~Only `GET` and `POST` implemented~~ - `PUT`, `PATCH`, `DELETE`, and `OPTIONS` all added, see `doc/features/MISSING_HTTP_VERBS.md`
+- ~~`ctx.body()` has no size cap (FINDING 7)~~ - configurable `maxBodySize`, rejects with 413 as the limit is crossed, see PLAN.md Phase 9.3
+- ~~`sendFile()` only resolved on the response's `"finish"` event (FINDING 8)~~ - now also settles on `"close"`, so a client aborting mid-download no longer leaks the read stream, see PLAN.md Phase 9.3
+- ~~Static files never checked `req.method` (FINDING 9)~~ - `StaticFileHandler` now checks for `HEAD` and skips opening a read stream entirely, see PLAN.md Phase 9.3
+- ~~Route params were never URL-decoded (FINDING 10)~~ - `RouteMatcher` and `Context.path` both decode consistently, see PLAN.md Phase 9.3
+- ~~No literal-over-parameter route precedence (FINDING 11)~~ - decided this stays as first-registered-wins by design, not a bug; documented in README's "Routing" section, see PLAN.md Phase 9.3
+- ~~`RouteMatcher` filtered empty path segments (FINDING 12)~~ - doubled slashes are now rejected rather than silently collapsed, see PLAN.md Phase 9.3
+- ~~`HttpError` had no `code`/`retryable`, and `.name` wasn't set (FINDING 13)~~ - both added, see PLAN.md Phase 9.3
+- ~~Static file path-traversal guard was a bare `startsWith(root)` (FINDING 2)~~ - now requires a path-separator boundary, see PLAN.md Phase 9.3
