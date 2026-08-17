@@ -183,6 +183,87 @@ set alongside API routes.
 See `examples/04-static-files` for a runnable version of unprefixed and
 prefixed mounting side by side.
 
+## Request and Response Helpers
+
+Beyond `ctx.params` and `ctx.query`, `Context` exposes a few more request
+shorthands:
+
+```ts
+app.get("/whoami", (ctx) => {
+    ctx.json({
+        ip: ctx.ipAddress,
+        userAgent: ctx.userAgent,
+        wantsJson: ctx.accepts("application/json"),
+    });
+});
+```
+
+* `ctx.ipAddress` - the client's IP, preferring `X-Forwarded-For` (set by
+  proxies and load balancers) over the raw socket address, and
+  normalising IPv4-mapped IPv6 addresses (`::ffff:127.0.0.1` becomes
+  `127.0.0.1`) and `::1` to `127.0.0.1`.
+* `ctx.userAgent` - the `User-Agent` header, or an empty string if absent.
+* `ctx.contentType` - the request's `Content-Type`, with parameters like
+  `; charset=utf-8` stripped.
+* `ctx.accepts(type)` - whether the client's `Accept` header allows
+  `type`, honouring `*/*` and prefix wildcards like `text/*`.
+
+On the response side:
+
+```ts
+app.get("/old-path", (ctx) => {
+    ctx.redirect("/new-path"); // 302 by default
+});
+
+app.get("/report", async (ctx) => {
+    await ctx.file("./reports/latest.pdf"); // served with the correct MIME type
+});
+
+app.get("/report/download", async (ctx) => {
+    await ctx.download("./reports/latest.pdf", "report.pdf"); // forces a download
+});
+```
+
+* `ctx.redirect(url, status?)` - defaults to `302`; pass `301` for a
+  permanent redirect.
+* `ctx.file(path)` - serves a single file from inside a route handler,
+  streamed, with `Content-Type` and `Content-Length` set automatically.
+  Throws `HttpError(404)` if the file doesn't exist. This differs from
+  `app.useStaticFiles()`: that mounts a whole directory as middleware,
+  this serves one specific file from a handler you write yourself, e.g.
+  a dynamically generated report or a computed path.
+* `ctx.download(path, filename?)` - like `ctx.file()`, but sets
+  `Content-Disposition: attachment` so the browser downloads it instead
+  of displaying it. `filename` defaults to the file's own base name.
+
+## Cookies
+
+```ts
+app.post("/login", (ctx) => {
+    ctx.cookie("session", "abc123", {
+        httpOnly: true,
+        secure: true,
+        maxAge: 3600,
+    });
+    ctx.json({ ok: true });
+});
+
+app.post("/logout", (ctx) => {
+    ctx.clearCookie("session");
+    ctx.json({ ok: true });
+});
+```
+
+`ctx.cookie(name, value, options?)` sets a `Set-Cookie` header, appending
+to any already set on the response rather than overwriting, since a
+response can set more than one cookie. `options` mirrors ASP.NET Core's
+`CookieOptions`: `maxAge` (seconds), `expires` (an absolute `Date`),
+`path` (defaults to `/`), `domain`, `secure`, `httpOnly`, and `sameSite`
+(`"Strict" | "Lax" | "None"`).
+
+`ctx.clearCookie(name)` is a shorthand for setting the same cookie with
+an already-expired date, which instructs the browser to delete it.
+
 ## Middleware
 
 Middleware can be registered using:
