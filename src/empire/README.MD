@@ -400,6 +400,74 @@ npx tsx examples/02-routing/server.ts
 | `07-body-size-limit` | 8007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
 | `08-authentication` | 8008 | A worked example of writing your own auth middleware: Bearer token parsing, `WWW-Authenticate` on rejection, and handing an identity to route handlers via `ctx.state` |
 
+## Testing
+
+Empire is tested with [Vitest](https://vitest.dev). Run the full suite
+from `src/empire`:
+
+```bash
+npm test
+```
+
+Tests are split into two kinds. `tests/unit/` has one file per class,
+exercising it directly and in isolation, often against the request and
+response stand-ins in `tests/fixtures/http/MockHttp.ts` rather than a
+real socket. `tests/integration/` starts a real `Empire` server on an
+ephemeral port and exercises it with real HTTP requests, since header
+and connection behavior - `WWW-Authenticate`, keep-alive sockets, an
+aborted download - is exactly what a mock gets wrong.
+
+### Unit tests, by class
+
+| Class | Test file |
+|---|---|
+| `Context` | `tests/unit/http/Context.test.ts`, `tests/unit/http/ContextBody.test.ts` |
+| `Empire` | `tests/unit/Empire.test.ts` |
+| `Router` | `tests/unit/routing/Router.test.ts`, `tests/unit/routing/RouterEdgeCases.test.ts` |
+| `RouteMatcher` | `tests/unit/routing/RouteMatcher.test.ts` |
+| `StaticFileHandler` | `tests/unit/static/StaticFileHandler.test.ts` |
+| `MimeTypes` | `tests/unit/static/MimeTypes.test.ts` |
+| `HttpError`, `BadRequestError` | `tests/unit/errors/HttpError.test.ts`, `tests/unit/errors/BadRequestError.test.ts` |
+| `ConsoleLogger` | `tests/unit/logging/ConsoleLogger.test.ts` |
+| `LoggerMiddleware` | `tests/unit/middleware/BuiltInMiddleware.test.ts` |
+
+### Integration tests
+
+Real servers, real sockets, covering behavior that only shows up across
+the full request pipeline rather than inside a single class:
+
+* `ContextSharing.test.ts` - the same `Context` instance is shared
+  between middleware and the matched route handler, so state attached in
+  one is visible in the other
+* `MiddlewarePipeline.test.ts` - registration order, a middleware that
+  throws, the double-`next()` guard
+* `HttpVerbs.test.ts` - PUT, PATCH, DELETE and OPTIONS over a real socket
+* `RoutingPatterns.test.ts` - multi-param routes and literal-vs-param
+  overlap, end to end
+* `RequestBody.test.ts` - the request body size limit over a real socket
+* `FileStreaming.test.ts` - an aborted download settles the handler's
+  promise instead of hanging it
+* `MalformedRequestPath.test.ts` - a malformed percent-encoded path
+  returns `400` consistently, regardless of how many routes are
+  registered
+* `ExampleAuth.test.ts` - the `examples/08-authentication` middleware's
+  actual HTTP-facing behavior: status codes, `WWW-Authenticate`, and the
+  identical rejection body for an unknown token versus a disabled account
+
+`StaticFileStreamingAbort.test.ts` is a manual-only exception: it is
+gated behind an environment variable and excluded from `npm test`,
+because it is flaky under full-suite parallelism for reasons not fully
+isolated. Run it on its own with:
+
+```bash
+RUN_FLAKY_TESTS=true npx vitest run tests/integration/StaticFileStreamingAbort.test.ts
+```
+
+Shared fixtures live in `tests/fixtures/`: `MockHttp.ts` (minimal
+`IncomingMessage`/`ServerResponse` stand-ins for unit tests) and
+`TestLogger.ts` (an in-memory `ILogger` for asserting on what was
+logged, without polluting test output).
+
 ## Project Structure
 
 ```text
