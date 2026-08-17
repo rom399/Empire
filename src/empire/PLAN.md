@@ -774,17 +774,24 @@ Analyze the testing requirements for <file path>.
 Smallest file, lowest risk, good first target. `HttpError extends Error`
 with a `statusCode` field; no fixtures needed.
 
-* [ ] `it('sets statusCode to the value passed to the constructor')`
-* [ ] `it('sets message to the value passed to the constructor')`
-* [ ] `it('is an instance of Error')`
+* [x] `it('sets statusCode to the value passed to the constructor')` -
+  covered by `'keeps the existing two-argument form working'`, which
+  asserts both `statusCode` and `message` together. This file was
+  superseded by the FINDING 13 version (code/retryable/name), written
+  later and covering these original three items as a byproduct rather
+  than under matching titles
+* [x] `it('sets message to the value passed to the constructor')` -
+  same test as above
+* [x] `it('is an instance of Error')` - covered by `'is catchable as an
+  Error and as an HttpError'`
 
 ### `tests/unit/errors/BadRequestError.test.ts`
 
 Extends `HttpError` with a hardcoded 400. No fixtures needed.
 
-* [ ] `it('sets statusCode to 400 regardless of what is passed')`
-* [ ] `it('sets message to the value passed to the constructor')`
-* [ ] `it('is an instance of HttpError')`
+* [x] `it('sets statusCode to 400 regardless of what is passed')`
+* [x] `it('sets message to the value passed to the constructor')`
+* [x] `it('is an instance of HttpError')`
 
 ### `tests/unit/logging/ConsoleLogger.test.ts`
 
@@ -812,10 +819,13 @@ which is otherwise untestable for an exact string match.
 Bonus — not in the original request, but trivial to add alongside the
 others and closes a gap flagged earlier as having no test coverage at all.
 
-* [ ] `it('returns the correct MIME type for a known extension')` (table-driven
-  across all 17 supported extensions)
-* [ ] `it('matching is case-insensitive')` (`.HTML` behaves like `.html`)
-* [ ] `it('falls back to application/octet-stream for an unknown extension')`
+* [x] `it('returns the correct MIME type for a known extension')` -
+  implemented as `it.each(cases)('getType(%s) returns %s', ...)`,
+  table-driven across all 17 supported extensions as planned, just
+  named per Vitest's own `it.each` convention rather than a single
+  `it('...')` title
+* [x] `it('matching is case-insensitive')` (`.HTML` behaves like `.html`)
+* [x] `it('falls back to application/octet-stream for an unknown extension')`
 
 ### `tests/unit/http/Context.test.ts`
 
@@ -959,18 +969,14 @@ without losing most of the value of the test.
 
 ### Verification
 
-* [x] `npx vitest run` — 193 passed, 1 skipped (as of
-  `doc/features/PHASE_9_2_CLOSEOUT_TESTS.md`'s Steps 1-3)
+* [x] `npx vitest run` - 206 passed, 1 skipped
 * [x] `npx tsc --noEmit` — no type errors
-* [ ] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.2 complete
-  — not yet: `get()`/`post()`, "Path traversal protection", and "Prefix
-  matching" are now all resolved (see
-  `doc/features/PHASE_9_2_CLOSEOUT_TESTS.md`), but the `HttpError.test.ts`,
-  `BadRequestError.test.ts`, and `MimeTypes.test.ts` checklist items above
-  are still unchecked despite those test files visibly existing and
-  passing in every full-suite run — likely stale checkboxes rather than a
-  real gap, but not verified in this pass, so left as-is rather than
-  assumed
+* [x] Update `doc/PROJECT_STATE.md` and this plan to mark Phase 9.2 complete
+  - every item in this section is now checked off, including
+  `HttpError.test.ts`, `BadRequestError.test.ts`, and `MimeTypes.test.ts`,
+  which turned out to already be covered rather than genuinely missing
+
+**Phase 9.2 is fully complete.**
 
 ---
 
