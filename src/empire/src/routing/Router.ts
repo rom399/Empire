@@ -3,6 +3,7 @@ import { Route } from "./Route";
 import { RouteMatcher } from "./RouteMatcher";
 import { RouteHandler } from "../types";
 import { Context } from "../http/Context";
+import { suppressResponseBody } from "../http/suppressResponseBody";
 import { HttpError } from "../errors/HttpError";
 import { ILogger } from "../logging/ILogger";
 
@@ -143,7 +144,7 @@ export class Router {
             }
 
             if (isHead) {
-                this.discardBody(res);
+                suppressResponseBody(res);
             }
 
             const requestCtx = ctx ?? new Context(req, res);
@@ -184,20 +185,6 @@ export class Router {
 
         res.statusCode = 404;
         res.end("Route not found");
-    }
-
-    /**
-     * Makes a response silently drop any body written to it while still
-     * setting status and headers normally. Used for HEAD requests: the
-     * matched GET handler runs unmodified (so Content-Type and
-     * Content-Length reflect exactly what a GET would have sent), but the
-     * actual bytes never reach the client, per RFC 9110 §9.3.2.
-     */
-    private discardBody(res: http.ServerResponse): void {
-        const originalEnd = res.end.bind(res);
-
-        res.write = (() => true) as typeof res.write;
-        res.end = ((..._args: unknown[]) => originalEnd()) as typeof res.end;
     }
 
     /**
