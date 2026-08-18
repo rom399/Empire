@@ -26,8 +26,8 @@ npm start
 ```
 
 `npm start` runs `examples/01-basic-server/server.ts`. There is no
-standalone server file at the project root - see the Examples table below
-for what else is available.
+standalone server file at the project root - see Examples below for what
+else is available.
 
 ```typescript
 import { Empire } from "./src/Empire";
@@ -63,17 +63,12 @@ The framework source and its full documentation live in [`src/empire`](src/empir
 
 ## Examples
 
-| Example | Port | Shows |
-|---|---|---|
-| [`01-basic-server`](src/empire/examples/01-basic-server) | 8001 | A minimal server: an HTML route, a JSON health check, and a POST route that echoes its JSON body back |
-| [`02-routing`](src/empire/examples/02-routing) | 8002 | A full REST-style user API: route params, query strings, a multi-param nested route, and a literal route registered ahead of an overlapping param route |
-| [`03-middleware`](src/empire/examples/03-middleware) | 8003 | The built-in `LoggerMiddleware` and `AuthMiddleware` plus a custom timing middleware, showing pipeline ordering |
-| [`04-static-files`](src/empire/examples/04-static-files) | 8004 | An unprefixed static folder and a second one mounted under a URL prefix, served side by side |
-| [`05-error-handling`](src/empire/examples/05-error-handling) | 8005 | `HttpError` and `BadRequestError` thrown from route handlers, and an uncaught error on `/crash` becoming a `500` |
-| [`06-react-app`](src/empire/examples/06-react-app) | 8006 | A real React + React Router app served with `spaFallback: true`, alongside a real API route that takes priority over the fallback |
-| [`07-body-size-limit`](src/empire/examples/07-body-size-limit) | 8007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
+Nine runnable examples live in [`src/empire/examples`](src/empire/examples), each a single `server.ts` covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, and dependency injection. See the [Examples section of the full documentation](src/empire/README.MD#examples) for the complete list with ports and descriptions.
 
-Each is a single `server.ts`. Run one with `npx tsx examples/02-routing/server.ts` from `src/empire`.
+```bash
+cd src/empire
+npx tsx examples/02-routing/server.ts
+```
 
 ## Repository layout
 
