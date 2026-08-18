@@ -6,6 +6,7 @@ import { Context } from "../../../src/http/Context";
 import { HttpError } from "../../../src/errors/HttpError";
 import { BadRequestError } from "../../../src/errors/BadRequestError";
 import { createMockRequest, createMockResponse } from "../../fixtures/http/MockHttp";
+import { createToken } from "../../../src/di/ServiceToken";
 
 describe("Context", () => {
 
@@ -476,6 +477,22 @@ describe("Context", () => {
             const header = (res.getHeader("Set-Cookie") as string[])[0];
             expect(header).toContain("session=");
             expect(header).toContain(`Expires=${new Date(0).toUTCString()}`);
+        });
+    });
+
+    describe("services", () => {
+
+        it("is undefined when no resolver was passed to the constructor", () => {
+            const ctx = new Context(createMockRequest(), createMockResponse());
+
+            expect(ctx.services).toBeUndefined();
+        });
+
+        it("exposes whatever resolver was passed to the constructor", async () => {
+            const resolver = { resolve: async () => "resolved-value" };
+            const ctx = new Context(createMockRequest(), createMockResponse(), {}, undefined, resolver);
+
+            await expect(ctx.services?.resolve(createToken<string>("Anything"))).resolves.toBe("resolved-value");
         });
     });
 });

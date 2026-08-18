@@ -9,7 +9,10 @@ The goal of the project is to understand how modern web frameworks such as Expre
 ## Current Features
 
 * HTTP server built on Node's `http` module, with configurable host and port
-* Promise-based `start()` and `stop()` lifecycle, `stop()` closing the server gracefully
+* Promise-based `start()` and `stop()` lifecycle - `stop()` closes idle
+  connections immediately, gives in-flight requests up to a configurable
+  timeout to finish, then force-closes stragglers and disposes any
+  registered dependency-injected singletons
 * Routing across all six HTTP methods, with `:param` capture and automatic HEAD and OPTIONS handling
 * Middleware pipeline executing in registration order (`app.use()`)
 * Static file serving, with optional URL prefixes and SPA fallback
@@ -422,6 +425,62 @@ const app = new Empire({
 });
 ```
 
+## Server Lifecycle
+
+```ts
+const app = new Empire({ host: "localhost", port: 8008 });
+
+await app.start(); // resolves once the server is listening
+await app.stop();  // resolves once it has shut down
+```
+
+`stop()` is a graceful shutdown, not a bare socket close:
+
+1. Idle keep-alive connections are closed immediately - they aren't
+   serving anything, so there is no reason to wait on them.
+2. The server stops accepting new connections; requests already in
+   flight are given time to finish naturally.
+3. Anything still open after `shutdownTimeoutMs` (default 10 seconds) is
+   force-closed, so one stuck request can't hang shutdown forever.
+4. Any singletons registered via `EmpireOptions.services` (see
+   [Dependency Injection](doc/features/DEPENDENCY_INJECTION.md)) are
+   disposed, in reverse construction order.
+
+Override the timeout per app:
+
+```ts
+const app = new Empire({
+    host: "localhost",
+    port: 8008,
+    shutdownTimeoutMs: 5000
+});
+```
+
+**Empire does not register `SIGTERM`/`SIGINT` handlers itself** - `stop()`
+provides the shutdown mechanics, but deciding *when* to call it is left to
+your application. This is deliberate: a library registering process-wide
+signal handlers as a side effect of construction is surprising, and would
+actively cause problems here - many short-lived `Empire` instances (this
+project's own test suite creates dozens) would each add their own
+listener, leaking them and risking interference with, for example, a test
+runner's own `Ctrl+C` handling. Wire it up yourself, the same way every
+example in `examples/` does:
+
+```ts
+process.on("SIGINT", async () => {
+    app.logger.info("Shutting down...");
+
+    try {
+        await app.stop();
+        app.logger.info("Server stopped.");
+        process.exit(0);
+    } catch (err) {
+        app.logger.error("Error during shutdown", err);
+        process.exit(1);
+    }
+});
+```
+
 ## Request Body Size Limit
 
 Empire caps request bodies at 1MB by default. A request over the limit
@@ -480,6 +539,7 @@ npx tsx examples/02-routing/server.ts
 | `06-react-app` | 8006 | A real React + React Router app served with `spaFallback: true`, alongside a real API route that takes priority over the fallback |
 | `07-body-size-limit` | 8007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
 | `08-authentication` | 8008 | A worked example of writing your own auth middleware: Bearer token parsing, `WWW-Authenticate` on rejection, and handing an identity to route handlers via `ctx.state` |
+| `09-dependency-injection` | 8009 | The DI container wired into a real app: a singleton in-memory repository backing three `/records` routes, and a scoped service that calls an "upstream" API over a real HTTP request via `ctx.services` |
 
 ## Testing
 
@@ -527,7 +587,8 @@ the full request pipeline rather than inside a single class:
   overlap, end to end
 * `RequestBody.test.ts` - the request body size limit over a real socket
 * `FileStreaming.test.ts` - an aborted download settles the handler's
-  promise instead of hanging it
+  promise instead of hanging it (this specific case is manual-only, see
+  below)
 * `MalformedRequestPath.test.ts` - a malformed percent-encoded path
   returns `400` consistently, regardless of how many routes are
   registered
@@ -535,14 +596,19 @@ the full request pipeline rather than inside a single class:
   actual HTTP-facing behavior: status codes, `WWW-Authenticate`, and the
   identical rejection body for an unknown token versus a disabled account
 
-`StaticFileStreamingAbort.test.ts` is a manual-only exception: it is
-gated behind an environment variable and excluded from `npm test`,
-because it is flaky under full-suite parallelism for reasons not fully
-isolated. Run it on its own with:
+Two tests are manual-only exceptions, gated behind an environment
+variable and excluded from `npm test`, because both are flaky under
+full-suite parallelism for reasons not fully isolated - the same
+underlying contention, on the two halves of the FINDING 8 fix:
 
 ```bash
 RUN_FLAKY_TESTS=true npx vitest run tests/integration/StaticFileStreamingAbort.test.ts
+RUN_FLAKY_TESTS=true npx vitest run tests/integration/FileStreaming.test.ts
 ```
+
+The second command also runs `FileStreaming.test.ts`'s other two tests
+again (they're reliable and already covered by `npm test`) - the flaky
+one is the only test in that file gated behind the environment variable.
 
 Shared fixtures live in `tests/fixtures/`: `MockHttp.ts` (minimal
 `IncomingMessage`/`ServerResponse` stand-ins for unit tests) and
@@ -562,7 +628,9 @@ empire/
 │   ├── static/          MimeTypes, StaticFileHandler and its option types
 │   ├── errors/          HttpError, BadRequestError, HttpErrorOptions
 │   ├── logging/         ILogger, ConsoleLogger
-│   └── di/              empty, Phase 10 placeholder
+│   └── di/              ServiceCollection, ServiceProvider, ServiceScope,
+│                         ServiceToken, Lifetime, Disposable, and their
+│                         supporting types (Resolver, Factory, ServiceDescriptor)
 ├── examples/
 │   ├── 01-basic-server/
 │   ├── 02-routing/
@@ -571,7 +639,8 @@ empire/
 │   ├── 05-error-handling/
 │   ├── 06-react-app/
 │   ├── 07-body-size-limit/
-│   └── 08-authentication/
+│   ├── 08-authentication/
+│   └── 09-dependency-injection/
 ├── tests/
 │   ├── unit/
 │   ├── integration/

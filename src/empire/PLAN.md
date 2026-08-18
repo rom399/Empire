@@ -71,9 +71,10 @@ verified directly against the source:
 * ctx.cookie(name, value, options?) — set a cookie on the response, via `CookieOptions`
 * ctx.clearCookie(name) — clear a cookie by setting expired date
 
-**Post-v1 only (depends on DI)**
-* ctx.services — deliberately deferred, added after Phase 10 Dependency
-  Injection is complete
+**Post-v1, added in Phase 10 (DI-6)**
+* ctx.services — a `Resolver`, backed by a per-request `ServiceScope`
+  Empire creates and disposes automatically. Undefined when the app was
+  built without `EmpireOptions.services`.
 
 **Update - ctx.state added:**
 
@@ -414,8 +415,9 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 
 ### Remaining
 
-**Post-v1 only (depends on Phase 10)**
-* ctx.services — ServiceProvider available per request after DI is implemented
+**Post-v1, done (Phase 10, DI-6)**
+* ctx.services — a `Resolver`, backed by a per-request `ServiceScope`,
+  wired into `Empire.handleRequest()`
 
 **Post-v1**
 * ctx.stream() — stream a readable to the response
@@ -1239,23 +1241,39 @@ Tests: `tests/unit/errors/HttpError.test.ts`
 
 ## Phase 10 — Dependency Injection
 
-Target API:
-
-```ts
-app.services.addSingleton(ILogger, ConsoleLogger);
-app.services.addTransient(IUserService, UserService);
-
-const logger = app.services.resolve(ILogger);
-```
+Full design lives in `doc/features/DEPENDENCY_INJECTION.md` — this section
+just tracks progress against that doc's DI-1 through DI-9 build order. The
+target API sketch that used to live here (`addSingleton(ILogger, ...)`,
+synchronous `resolve()`) was pre-design pseudocode with the same bug the
+design doc's section 2.2 exists to fix - a TypeScript interface can't be
+passed as a runtime token, since interfaces are erased at compile time.
+The design doc uses `Symbol`-based `ServiceToken<T>` instead; see that doc
+for the real API.
 
 ### Tasks
 
-* ServiceLifetime enum — Singleton, Transient, Scoped
-* ServiceDescriptor class — holds token, implementation, lifetime
-* ServiceCollection class — addSingleton(), addTransient(), addScoped()
-* ServiceProvider class — resolve(), builds and caches instances
-* Integration with Empire class via app.services
-* Integration with Context via ctx.services
+* ✅ DI-1: Tokens & types — `ServiceToken`, `createToken`, `Lifetime`,
+  `ServiceDescriptor`, `Resolver`
+* ✅ DI-2: `ServiceCollection` — `addSingleton`/`addScoped`/`addTransient`,
+  hard-crash on duplicate/late registration
+* ✅ DI-3: Root `ServiceProvider` — singleton promise-caching, transient
+  resolution, missing-registration and circular-dependency rejection
+* ✅ DI-4: `ServiceScope` — scoped promise-caching, `createScope()`,
+  root-provider guard against resolving scoped tokens
+* ✅ DI-5: Disposal — `Disposable`/`isDisposable`, per-scope tracking,
+  `ServiceScope.dispose()`
+* ✅ DI-6: HTTP integration — `EmpireOptions.services`, a scope created and
+  disposed per request in `Empire.handleRequest()`, `ctx.services`
+* ✅ DI-7: Proof-of-concept services — `examples/09-dependency-injection/`
+  (`IHttpClient`/`NodeHttpClient` + `UpstreamApiService` calling a real
+  HTTP endpoint; `IRecordRepository` singleton backing three routes)
+* ✅ DI-8: Graceful shutdown — `ServiceProvider.dispose()` in reverse
+  construction order, idle-connection close, timeout-forced close, all
+  wired into `Empire.stop()`. No auto-registered `SIGTERM`/`SIGINT` -
+  that stays the application's job; see README.MD's "Server Lifecycle"
+  section and the design doc's 2026-08-18 decisions for why
+* 🚧 DI-9: Broader test pass (much of this is already covered test-first by
+  DI-1 through DI-8's own test suites)
 
 ---
 
