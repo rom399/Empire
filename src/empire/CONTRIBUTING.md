@@ -58,7 +58,7 @@ empire/
 |------|-----------|---------|
 | Classes | PascalCase | `ServiceCollection` |
 | Interfaces | PascalCase with I prefix | `IServiceCollection` |
-| Enums | PascalCase | `ServiceLifetime` |
+| Enums | PascalCase | `Lifetime` |
 | Enum values | PascalCase | `Singleton`, `Transient`, `Scoped` |
 | Methods | camelCase descriptive verbs | `addSingleton`, `resolve` |
 | Files | Match class name exactly | `ServiceCollection.ts` |
@@ -77,21 +77,21 @@ empire/
 
 ```typescript
 // ✅ Correct — readable and explicit
-public resolve<T>(token: new (...args: unknown[]) => T): T {
-    const descriptor = this.services.get(token);
+public async resolve<T>(token: ServiceToken<T>): Promise<T> {
+    const descriptor = this.descriptors.get(token);
 
     if (!descriptor) {
-        throw new Error(`Service not registered: ${token.name}`);
+        throw new Error(`Service not registered: ${token.description}`);
     }
 
-    return this.createInstance(descriptor);
+    return descriptor.factory(this);
 }
 
 // ❌ Wrong — clever but unclear
-public resolve<T>(t: any) {
-    const d = this.s.get(t);
-    if (!d) throw new Error(`Not found: ${t.name}`);
-    return this.create(d);
+public async resolve<T>(t: any) {
+    const d = this.d.get(t);
+    if (!d) throw new Error(`Not found: ${t.description}`);
+    return d.factory(this);
 }
 ```
 
@@ -144,10 +144,9 @@ if (body.length > 1048576) { ... }
  * Registers a service with singleton lifetime.
  * The same instance is returned for every resolution.
  */
-public addSingleton<T>(token: new (...args: unknown[]) => T, instance?: T): this {
-    // Store as singleton so the provider never creates a second instance
-    this.services.set(token, new ServiceDescriptor(token, ServiceLifetime.Singleton, instance));
-    return this;
+public addSingleton<T>(token: ServiceToken<T>, factory: Factory<T>): void {
+    // Store as singleton so the provider only ever builds one instance
+    this.register(token, Lifetime.Singleton, factory);
 }
 ```
 
@@ -199,20 +198,25 @@ it('transient test')
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { ServiceCollection } from '../../src/di/ServiceCollection';
+import { createToken } from '../../src/di/ServiceToken';
 import { TestLogger } from '../fixtures/services/TestLogger';
+
+const LoggerToken = createToken<TestLogger>('Logger');
 
 describe('ServiceCollection', () => {
 
     describe('addSingleton', () => {
 
-        it('returns the same instance on every resolution', () => {
+        // provider.resolve() is DI-3 — this is the target shape once it lands
+        it('returns the same instance on every resolution', async () => {
             const services = new ServiceCollection();
             const logger = new TestLogger();
 
-            services.addSingleton(ILogger, logger);
+            services.addSingleton(LoggerToken, () => logger);
+            const provider = services.build();
 
-            const first = services.resolve(ILogger);
-            const second = services.resolve(ILogger);
+            const first = await provider.resolve(LoggerToken);
+            const second = await provider.resolve(LoggerToken);
 
             expect(first).toBe(second);
         });

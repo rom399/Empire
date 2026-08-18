@@ -5,6 +5,8 @@ import * as path from "path";
 import { Empire } from "../../src/Empire";
 import { ConsoleLogger } from "../../src/logging/ConsoleLogger";
 import { TestLogger } from "../fixtures/services/TestLogger";
+import { ServiceCollection } from "../../src/di/ServiceCollection";
+import { createToken } from "../../src/di/ServiceToken";
 
 /**
  * Server lifecycle, logger injection (Phase 1), routing method delegation
@@ -68,6 +70,54 @@ describe("Empire", () => {
             await first.start();
 
             await expect(second.start()).rejects.toThrow();
+        });
+    });
+
+    describe("graceful shutdown", () => {
+
+        it("disposes services registered via EmpireOptions.services when the server stops", async () => {
+            const services = new ServiceCollection();
+            const token = createToken<{ dispose(): void }>("Connection");
+            let disposed = false;
+            services.addSingleton(token, () => ({ dispose: () => { disposed = true; } }));
+            const provider = services.build();
+
+            const app = new Empire({ host: "127.0.0.1", port: 47017, services: provider });
+            instances.push(app);
+
+            await app.start();
+            await app.services?.resolve(token);
+            await app.stop();
+
+            expect(disposed).toBe(true);
+        });
+
+        it("force-closes remaining connections once shutdownTimeoutMs elapses, instead of hanging forever", async () => {
+            const logger = new TestLogger();
+            const app = new Empire({ host: "127.0.0.1", port: 47018, shutdownTimeoutMs: 50, logger });
+            instances.push(app);
+
+            // Never resolves - simulates a request stuck mid-flight when
+            // shutdown begins, forcing the timeout path to actually run.
+            app.get("/hang", () => new Promise<void>(() => {}));
+
+            await app.start();
+            const hanging = fetch("http://127.0.0.1:47018/hang").catch(() => undefined);
+
+            // Give the request time to actually be in flight before stopping.
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            const startedAt = Date.now();
+            await app.stop();
+            const elapsedMs = Date.now() - startedAt;
+
+            // Bounded well below the 10s default - proves the 50ms override
+            // was honored rather than falling back to the default, and that
+            // stop() doesn't simply wait for the hanging request forever.
+            expect(elapsedMs).toBeLessThan(2000);
+            expect(logger.errorMessages.some((m) => m.includes("Shutdown timed out"))).toBe(true);
+
+            await hanging;
         });
     });
 

@@ -55,14 +55,17 @@ root cause, fix, files touched — is in PLAN.md Phase 9.3.
 - FINDING 13 — `HttpError` had no `code`/`retryable` and didn't set
   `.name`, so every framework error serialised as generic `"Error"`
 
-Current test status: **207 tests, 206 passing, 1 skipped** (a manual-only
-test for FINDING 8's `StaticFileHandler` half — flaky under full-suite
-parallelism for reasons not fully isolated; run via `RUN_FLAKY_TESTS=true
-npx vitest run tests/integration/StaticFileStreamingAbort.test.ts`).
-`tests/integration/FileStreaming.test.ts`'s abort-mid-stream test also
-flakes intermittently under full-suite parallelism (same root cause,
-unrelated to the skip above) — re-run before assuming a real regression
-if it's the only failure.
+Current test status: **263 tests, 261 passing, 2 skipped** — both skips are
+manual-only tests for the two halves of FINDING 8, flaky under full-suite
+parallelism for reasons not fully isolated:
+- `StaticFileHandler`'s half — `RUN_FLAKY_TESTS=true npx vitest run
+  tests/integration/StaticFileStreamingAbort.test.ts`
+- `Context.ts`'s half, `tests/integration/FileStreaming.test.ts`'s
+  abort-mid-stream test — replacing the original fixed 300ms sleep with
+  `vi.waitFor()` polling narrowed the failure window considerably but
+  didn't eliminate it under heavy full-suite contention, so it's gated the
+  same way: `RUN_FLAKY_TESTS=true npx vitest run
+  tests/integration/FileStreaming.test.ts`
 
 Resolved:
 - ~~0 — Context API freeze~~ — all v1 Context members implemented
@@ -155,8 +158,10 @@ Post-v1 additions:
   route handlers to read; added as a prerequisite for
   `doc/features/EXAMPLE_AUTHENTICATION_MIDDLEWARE.md`
 
-Post-v1 only (requires DI):
-- `ctx.services` — `ServiceProvider` per request
+Post-v1, added in Phase 10 (DI-6):
+- `ctx.services` — a `Resolver`, backed by a per-request `ServiceScope`
+  Empire creates and disposes automatically once the response ends.
+  Undefined when the app was built without `EmpireOptions.services`.
 
 ### Phase 5 — Request Bodies ✅
 - `ctx.body()` — full body as string
@@ -200,7 +205,8 @@ Post-v1 only (requires DI):
 - Project renamed to `empire`
 - `src/http/`, `src/errors/`, `src/middleware/`, `src/static/`, `src/logging/`
 - `src/routing/` — `Route`, `RouteMatch`, `RouteMatcher`, `Router`
-- `src/di/` placeholder directory, ready for Phase 10
+- `src/di/` — placeholder at the time; now the Phase 10 dependency
+  injection container, see below
 - `tests/unit/`, `tests/http/`, `tests/fixtures/`
 - `doc/` directory with architecture and state documents
 
@@ -243,25 +249,27 @@ already be covered rather than genuinely missing.
 
 ---
 
-## Next Major Milestone — Phase 10: Dependency Injection
+### Phase 10 — Dependency Injection 🚧 (DI-9 remaining)
 
-All v1.0.0 blockers are resolved, and Phase 9.1's test/example coverage —
-recommended as a foundation before DI sits on top of `Router` — is
-complete. Phase 10 can begin whenever it's picked up.
+Full design and build-order tracking now live in
+`doc/features/DEPENDENCY_INJECTION.md`, not here — this entry just
+summarizes status. DI-1 through DI-8 are complete and shipped:
 
-Target API:
-```ts
-app.services.addSingleton(ILogger, ConsoleLogger);
-app.services.addTransient(IUserService, UserService);
+- `src/di/` — `ServiceToken`/`createToken`, `Lifetime`, `Resolver`,
+  `Factory`, `ServiceDescriptor`, `ServiceCollection`, `ServiceProvider`,
+  `ServiceScope`, `Disposable`/`isDisposable`
+- `EmpireOptions.services` (root `ServiceProvider`) and `ctx.services` (a
+  per-request `ServiceScope`, exposed as the narrower `Resolver`)
+- `Empire.stop()` disposes registered singletons as part of a full
+  graceful shutdown (idle-connection close, timeout-forced close,
+  configurable via `EmpireOptions.shutdownTimeoutMs`)
+- `examples/09-dependency-injection/server.ts` — a singleton in-memory
+  repository backing three routes, plus a scoped service calling a real
+  HTTP endpoint through the container
 
-const logger = app.services.resolve(ILogger);
-```
-
-Files to create in `src/di/`:
-- `ServiceLifetime.ts` — enum: `Singleton`, `Transient`, `Scoped`
-- `ServiceDescriptor.ts` — holds token, implementation, lifetime
-- `ServiceCollection.ts` — `addSingleton()`, `addTransient()`, `addScoped()`
-- `ServiceProvider.ts` — `resolve()`, singleton cache
+Only DI-9 (a final broader test-coverage pass) remains, though most of
+that ground is already covered test-first by DI-1 through DI-8's own
+suites.
 
 ---
 
@@ -269,7 +277,6 @@ Files to create in `src/di/`:
 
 | Phase | Name | Key Goal |
 |-------|------|----------|
-| 10 | Dependency Injection | `app.services` container |
 | 11 | Validation | Body, query, and param validation with auto-400 |
 | 12 | Authentication | JWT, bearer tokens, roles, policies |
 | 13 | Configuration | appsettings.json, env vars, options pattern |

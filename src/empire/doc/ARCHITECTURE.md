@@ -252,8 +252,9 @@ clean, typed API. Passed to every route handler and every middleware.
 
 **The Context API is frozen for v1** — every member below is implemented.
 Any method added after v1 must be additive only (no signature changes, no
-removals), except `ctx.services`, which is deliberately deferred until
-Phase 10 (Dependency Injection) is complete.
+removals). `ctx.services` was the one deliberately deferred exception,
+added in Phase 10 (DI-6) as a `Resolver` backed by a per-request
+`ServiceScope` — see `doc/features/DEPENDENCY_INJECTION.md`.
 
 **Request properties:**
 

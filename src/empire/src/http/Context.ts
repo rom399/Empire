@@ -6,6 +6,7 @@ import { HttpError } from "../errors/HttpError";
 import { MimeTypes } from "../static/MimeTypes";
 import { CookieOptions } from "./CookieOptions";
 import { streamFileToResponse } from "./streamFile";
+import { Resolver } from "../di/Resolver";
 
 export class Context {
     private static readonly DEFAULT_REDIRECT_STATUS = 302;
@@ -26,6 +27,16 @@ export class Context {
      */
     public readonly state: Record<string, unknown> = {};
 
+    /**
+     * Resolves dependencies registered on the Empire instance, backed by a
+     * ServiceScope Empire creates and disposes per request - see
+     * Empire.handleRequest(). Typed as the narrower Resolver rather than
+     * ServiceScope itself, so a route handler can resolve() but has no way
+     * to reach the scope's dispose() - that stays Empire's responsibility.
+     * Undefined when the app was constructed without EmpireOptions.services.
+     */
+    public readonly services?: Resolver;
+
     private readonly maxBodySize: number;
     private bodyPromise?: Promise<string>;
 
@@ -33,12 +44,14 @@ export class Context {
         req: http.IncomingMessage,
         res: http.ServerResponse,
         params: Record<string, string> = {},
-        maxBodySize: number = Context.DEFAULT_MAX_BODY_SIZE
+        maxBodySize: number = Context.DEFAULT_MAX_BODY_SIZE,
+        services?: Resolver
     ) {
         this.req = req;
         this.res = res;
         this.params = params;
         this.maxBodySize = maxBodySize;
+        this.services = services;
     }
 
     public get headers(): IncomingHttpHeaders {
