@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -64,10 +64,17 @@ describe("File streaming", () => {
         setTimeout(() => controller.abort(), 15);
         await request;
 
-        // Give the server a moment to unwind.
-        await new Promise((r) => setTimeout(r, 300));
-
-        expect(handlerReturned).toBe(true);
+        // Poll instead of a fixed sleep. A fixed delay is a race: under
+        // full-suite parallel load, the "close" event and its cleanup can
+        // genuinely take longer than a fixed margin would allow, which is
+        // what made this test flaky (it does not mean the fix is broken -
+        // reverting the fix under test makes this fail every time, not
+        // intermittently, which is how the flakiness was told apart from
+        // a real regression). Retries every 20ms for up to 2s rather than
+        // gambling on one fixed wait being enough.
+        await vi.waitFor(() => {
+            expect(handlerReturned).toBe(true);
+        }, { timeout: 2000, interval: 20 });
     });
 
     it("serves a small file completely", async () => {
