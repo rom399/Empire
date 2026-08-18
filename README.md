@@ -37,8 +37,19 @@ const app = new Empire({
     port: 8008
 });
 
-app.get("/users/:id", (ctx) => {
-    ctx.json({ id: ctx.params.id });
+app.get("/", (ctx) => {
+    ctx.html(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>Empire</title>
+            </head>
+            <body>
+                <h1>Welcome to Empire</h1>
+                <p>A lightweight TypeScript web framework.</p>
+            </body>
+        </html>
+    `);
 });
 
 await app.start();
