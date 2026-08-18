@@ -8,7 +8,7 @@
     "dev": "tsx watch examples/01-basic-server/server.ts"
   },
   "keywords": ["typescript", "http", "web-framework", "middleware"],
-  "author": "Roman Hanousek <rom399@gmail.com>",
+  "author": "Roman",
   "license": "MIT",
   "type": "commonjs",
   "devDependencies": {

@@ -258,7 +258,7 @@ claim.
 ### Suggested solution
 
 Set `"license": "MIT"` to match the README, and add a `LICENSE` file at
-the repository root with the standard MIT text, copyright Roman Hanousek,
+the repository root with the standard MIT text, copyright Roman,
 current year.
 
 Fill in `description` from the repository description. Set `author`. Add
