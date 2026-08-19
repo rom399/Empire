@@ -7,9 +7,10 @@ built-in `http` module. It has no runtime dependencies. The design is inspired b
 ASP.NET Core — middleware pipelines, dependency injection, strongly-typed context,
 and a clean separation of concerns.
 
-Current version: **0.14.0 — Missing HTTP Verbs Complete**. See
-`doc/PROJECT_STATE.md` for the up-to-date status and `PLAN.md` for the full
-phase-by-phase roadmap. No v1.0.0 blockers remain.
+Current version: **0.15.0 — Dependency Injection (DI-1 through DI-8
+complete; DI-9 final test pass in progress)**. See `doc/PROJECT_STATE.md`
+for the up-to-date status and `PLAN.md` for the full phase-by-phase
+roadmap. No v1.0.0 blockers remain.
 
 ---
 
@@ -37,7 +38,9 @@ empire/
 ├── src/
 │   ├── http/
 │   │   ├── Context.ts              # Per-request context object — API frozen for v1
-│   │   └── CookieOptions.ts        # Options for ctx.cookie()
+│   │   ├── CookieOptions.ts        # Options for ctx.cookie()
+│   │   ├── streamFile.ts           # Shared fs.createReadStream()-to-response streaming logic
+│   │   └── suppressResponseBody.ts # Discards a response body for HEAD requests
 │   ├── logging/
 │   │   ├── ILogger.ts              # Logger interface
 │   │   └── ConsoleLogger.ts        # Default console implementation
@@ -45,7 +48,9 @@ empire/
 │   │   └── LoggerMiddleware.ts     # createLoggerMiddleware(logger) factory
 │   ├── errors/
 │   │   ├── HttpError.ts            # Base HTTP error class
-│   │   └── BadRequestError.ts      # 400 error shorthand
+│   │   ├── HttpErrorOptions.ts     # { code?, retryable? } accepted by HttpError's constructor
+│   │   ├── BadRequestError.ts      # 400 error shorthand
+│   │   └── sendErrorResponse.ts    # Converts a thrown error into a JSON error response
 │   ├── static/
 │   │   ├── MimeTypes.ts            # Extension → MIME type lookup, 17 extensions
 │   │   ├── StaticFileOptions.ts    # Static file config interface (root, prefix?)
@@ -56,24 +61,38 @@ empire/
 │   │   ├── RouteMatch.ts           # Result of matching a route against a request path
 │   │   ├── RouteMatcher.ts         # Segment-based path matching, extracts :params
 │   │   └── Router.ts               # Route registration and request dispatch
-│   ├── di/                         # Empty — Phase 10 placeholder
+│   ├── di/                         # Dependency injection container (Phase 10) — see
+│   │   │                           # doc/features/DEPENDENCY_INJECTION.md for the full design
+│   │   ├── ServiceToken.ts         # Symbol-based token type + createToken()
+│   │   ├── Lifetime.ts             # Singleton / Scoped / Transient enum
+│   │   ├── Resolver.ts             # resolve<T>(token): Promise<T> contract
+│   │   ├── Factory.ts              # (resolver) => T | Promise<T>
+│   │   ├── ServiceDescriptor.ts    # token + lifetime + factory bundle
+│   │   ├── ServiceCollection.ts    # addSingleton/addScoped/addTransient, build()
+│   │   ├── ServiceProvider.ts      # Root container — resolve(), createScope(), dispose()
+│   │   ├── ServiceScope.ts         # Per-request scope — resolve(), dispose()
+│   │   └── Disposable.ts           # Disposable interface + isDisposable() type guard
 │   ├── types.ts                    # Middleware, RouteHandler types
 │   └── Empire.ts                   # Main framework class — server lifecycle, middleware, delegates routing to Router
 │
 ├── tests/
 │   ├── unit/                       # Vitest unit tests — run via `npm test`
+│   │   ├── Empire.test.ts          # Server lifecycle, routing delegation, graceful shutdown
 │   │   ├── routing/                # Router, RouteMatcher, RouterEdgeCases (FINDING 10-12)
 │   │   ├── http/                   # Context, ContextBody (FINDING 6-7)
-│   │   ├── errors/                 # HttpError (FINDING 13)
+│   │   ├── errors/                 # HttpError (FINDING 13), BadRequestError
 │   │   ├── static/                 # StaticFileHandler (FINDING 2, 9)
 │   │   ├── logging/
 │   │   ├── middleware/             # BuiltInMiddleware (FINDING 5)
-│   │   └── di/                     # placeholder, Phase 10
+│   │   └── di/                     # ServiceCollection, ServiceProvider, ServiceScope, ServiceToken
 │   ├── integration/                # Real-server tests: ContextSharing, MiddlewarePipeline,
-│   │                                # RequestBody, FileStreaming (FINDING 1, 3, 4, 6-8) — see
+│   │                                # RequestBody, FileStreaming (FINDING 1, 3, 4, 6-8),
+│   │                                # DependencyInjection, ExampleAuth, HttpVerbs,
+│   │                                # MalformedRequestPath, RoutingPatterns — see
 │   │                                # PLAN.md Phase 9.3
 │   ├── http/
 │   │   ├── empire.http             # REST client tests
+│   │   ├── routing.http            # One request per route, plus 404/HEAD/405+Allow cases
 │   │   └── invalid-json.http
 │   └── fixtures/
 │       ├── static/                 # Static file test assets
@@ -88,11 +107,17 @@ empire/
 │   ├── 04-static-files/            # Static file serving — unprefixed wwwroot/ and prefixed uploads/
 │   ├── 05-error-handling/          # HttpError and BadRequestError
 │   ├── 06-react-app/               # SPA support — spaFallback, streaming, index.html fallback, API routes
-│   └── 07-body-size-limit/         # Configurable request body size limit, 413 on oversized bodies
+│   ├── 07-body-size-limit/         # Configurable request body size limit, 413 on oversized bodies
+│   ├── 08-authentication/          # Writing your own auth middleware — Bearer tokens, ctx.state
+│   └── 09-dependency-injection/    # DI container wired into a real app — singleton repository,
+│                                    # scoped service calling a real HTTP endpoint via ctx.services
 │
 ├── doc/
 │   ├── ARCHITECTURE.md             # This file
-│   └── PROJECT_STATE.md            # Current status and next steps
+│   ├── PROJECT_STATE.md            # Current status and next steps
+│   └── features/                   # One doc per in-flight or completed feature build
+│       └── DEPENDENCY_INJECTION.md # Full DI design: tokens, lifetimes, scoping, disposal,
+│                                    # graceful shutdown, decisions log
 │
 ├── PLAN.md                         # Full phase-by-phase roadmap
 ├── CONTRIBUTING.md                 # Contribution conventions
@@ -107,10 +132,6 @@ root this document describes. CI runs `npm ci`, `tsc --noEmit`, and
 `vitest run` (scoped to `src/empire`) on every push to `main` and every
 pull request; Dependabot opens weekly update PRs for npm dependencies and
 for the Actions versions the workflow pins.
-
-Note: the routing example additions and their `.http` requests from PLAN.md
-Phase 9.1 (multi-param route, overlapping routes) are still open — only the
-unit test coverage in that phase is done.
 
 ---
 
@@ -268,6 +289,7 @@ added in Phase 10 (DI-6) as a `Resolver` backed by a per-request
 | `headers` | `IncomingHttpHeaders` | Incoming request headers |
 | `params` | `Record<string, string>` | Route parameters from `:id` segments |
 | `state` | `Record<string, unknown>` | Post-v1 addition. Per-request bag for middleware to attach data (e.g. an authenticated user) for downstream middleware and route handlers to read. Untyped by design - reading a value back requires narrowing, not casting with `as` |
+| `services` | `Resolver` \| `undefined` | Post-v1 addition (Phase 10, DI-6). Resolves dependencies registered via `EmpireOptions.services`, backed by a per-request `ServiceScope` that Empire creates and disposes automatically once the response ends. `undefined` when the app was built without `EmpireOptions.services` — dependency injection is entirely opt-in |
 | `ipAddress` | `string` | Client IP — handles `x-forwarded-for` and IPv6 |
 | `userAgent` | `string` | User-Agent header shorthand, empty string when absent |
 | `contentType` | `string` | Content-Type without parameters (strips `; charset=...`) |
@@ -296,12 +318,6 @@ added in Phase 10 (DI-6) as a `Resolver` backed by a per-request
 | `download(path, filename?)` | Like `file()` but forces download via `Content-Disposition` |
 | `cookie(name, value, options?)` | Sets a response cookie — chainable. Appends to existing `Set-Cookie` headers rather than overwriting. Options via `CookieOptions` (`maxAge`, `expires`, `path`, `domain`, `secure`, `httpOnly`, `sameSite`) |
 | `clearCookie(name)` | Clears a cookie by name — chainable |
-
-**Deferred:**
-
-| Member | Description |
-|--------|-------------|
-| `services` | `ServiceProvider` per request — added once Phase 10 (DI) is complete |
 
 ---
 
@@ -552,9 +568,12 @@ Result:  ctx.params.id === "42"
 
 ```ts
 interface EmpireOptions {
-    host: string;        // e.g. "localhost"
-    port: number;        // e.g. 8001
-    logger?: ILogger;    // defaults to ConsoleLogger
+    host: string;                  // e.g. "localhost"
+    port: number;                  // e.g. 8001
+    logger?: ILogger;              // defaults to ConsoleLogger
+    maxBodySize?: number;          // in bytes, defaults to 1 MB
+    services?: ServiceProvider;    // root DI container - opt-in, see Phase 10
+    shutdownTimeoutMs?: number;    // graceful stop() timeout, defaults to 10s
 }
 ```
 

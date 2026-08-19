@@ -20,7 +20,8 @@ Empire should eventually support:
 
 ## Current Version
 
-0.14.0 — Missing HTTP Verbs Complete
+0.15.0 — Dependency Injection (DI-1 through DI-8 complete; DI-9 final
+test pass in progress)
 
 **v1.0.0 blockers:** none. All Priority items are resolved — see below.
 Phase 9.1 (routing test/example coverage), Phase 9.3 (all 13 bug-hunt
@@ -41,7 +42,7 @@ params, trailing-slash support) is lower-priority, not release-blocking.
 
 ---
 
-## Priority — Required Before Phase 10
+## Priority — Resolved Before Phase 10
 
 These items must be resolved before Dependency Injection work begins.
 They are gaps or breaking inconsistencies discovered when comparing the
@@ -1347,13 +1348,31 @@ class UserController {
 
 ## Phase 15 — Advanced Dependency Injection
 
-### Tasks
+Most of this phase's original task list shipped as part of the regular
+Phase 10 build, not as a separate "advanced" phase:
 
-* Constructor injection
-* Scoped lifetime
-* Factory registrations
-* Circular dependency detection
-* Open generics
+* ~~Scoped lifetime~~ — `ServiceScope`, DI-4
+* ~~Factory registrations~~ — every `addSingleton`/`addScoped`/`addTransient`
+  call takes a factory, DI-2
+* ~~Circular dependency detection~~ — per-call resolution-path tracking in
+  both `ServiceProvider` and `ServiceScope`, DI-3/DI-4
+
+### Remaining
+
+* **Open generics** — not yet evaluated; TypeScript's type erasure makes
+  the .NET concept of an "open generic" registration (`AddSingleton(typeof(IRepository<>), typeof(Repository<>))`)
+  a different problem here, if it's even applicable at all
+* **Constructor injection (automatic, by type)** — deliberately **not**
+  planned, not just unstarted. Automatic injection needs a class's
+  constructor parameter *types* available at runtime, which TypeScript
+  erases; the only way to get them back is `experimentalDecorators` +
+  `emitDecoratorMetadata`, needing the `reflect-metadata` polyfill as a
+  runtime dependency — directly against the zero-dependency constraint.
+  See `doc/features/DEPENDENCY_INJECTION.md`'s guardrails section for the
+  full reasoning. Explicit-token wiring (list the tokens by hand, let the
+  container instantiate) remains possible without a dependency if this
+  phase is ever picked back up, and would pair naturally with Phase 14's
+  decorator-based controllers.
 
 ---
 
