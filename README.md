@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rom399/Empire/actions/workflows/ci.yml/badge.svg)](https://github.com/rom399/Empire/actions/workflows/ci.yml)
 
-A lightweight TypeScript web framework built from scratch on Node's `http` module. Routing, a middleware pipeline, a Context API, static file serving, and centralized error handling, with zero runtime dependencies.
+A lightweight TypeScript web framework built from scratch on Node's `http` module. Routing, a middleware pipeline, a Context API, static file serving, dependency injection, and centralized error handling - all with zero runtime dependencies. Schema-based validation is the one deliberate exception, depending on [Zod](https://zod.dev) (see [`doc/features/VALIDATION.md`](src/empire/doc/features/VALIDATION.md) for why).
 
 Empire exists to answer a question that using a framework never does: what is actually happening between the socket and your handler? Express, Koa, Fastify, and ASP.NET Core all solve the same problems in recognisably similar ways, and the fastest way to understand those solutions is to build them. Every feature here is implemented directly against Node's `http` module rather than wrapped around an existing library.
 
@@ -13,6 +13,8 @@ Empire exists to answer a question that using a framework never does: what is ac
 - Routing across all six HTTP methods, with `:param` capture and automatic HEAD and OPTIONS handling
 - Middleware pipeline executing in registration order (`app.use()`)
 - Static file serving, with optional URL prefixes and SPA fallback
+- A hand-rolled dependency injection container - singleton/scoped/transient lifetimes, disposal, graceful shutdown
+- Schema-based request validation (body, query, route params) via `validate()`, backed by Zod
 - Centralized error handling built around `HttpError`
 - Configurable request body size limit
 - Pluggable logging abstraction (`ILogger`), with a built-in console logger
@@ -63,7 +65,7 @@ The framework source and its full documentation live in [`src/empire`](src/empir
 
 ## Examples
 
-Nine runnable examples live in [`src/empire/examples`](src/empire/examples), each a single `server.ts` covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, and dependency injection. See the [Examples section of the full documentation](src/empire/README.MD#examples) for the complete list with ports and descriptions.
+Ten runnable examples live in [`src/empire/examples`](src/empire/examples), each a single `server.ts` covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, dependency injection, and validation. See the [Examples section of the full documentation](src/empire/README.MD#examples) for the complete list with ports and descriptions.
 
 ```bash
 cd src/empire

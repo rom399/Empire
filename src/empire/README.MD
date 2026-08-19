@@ -16,6 +16,10 @@ The goal of the project is to understand how modern web frameworks such as Expre
 * Routing across all six HTTP methods, with `:param` capture and automatic HEAD and OPTIONS handling
 * Middleware pipeline executing in registration order (`app.use()`)
 * Static file serving, with optional URL prefixes and SPA fallback
+* A dependency injection container - `addSingleton`/`addScoped`/`addTransient`,
+  per-request scoping via `ctx.services`, disposal
+* Schema-based request validation (body, query, route params) via `validate()`,
+  the one deliberate exception to Empire's zero-runtime-dependency rule
 * Centralized error handling built around `HttpError`
 * Configurable request body size limit
 * Pluggable logging abstraction (`ILogger`), with a built-in console logger
@@ -360,6 +364,68 @@ response and no error body.
 See `examples/05-error-handling` for a runnable version of all of the above,
 including the always-500 `/crash` route.
 
+## Validation
+
+`validate()` wraps a route handler with schema-based validation of the
+request body, query string, and/or route params, using
+[Zod](https://zod.dev) - the one deliberate exception to Empire's
+zero-runtime-dependency rule (see
+[`doc/features/VALIDATION.md`](doc/features/VALIDATION.md) §2.1 for why).
+It wraps a handler the same way `createLoggerMiddleware(logger)` wraps a
+middleware, so it needs no changes to `Router` or `Context`:
+
+```ts
+import { z } from "zod";
+import { validate } from "./src/validation/validate";
+
+const createUserSchema = z.object({
+    name: z.string().min(1, "name is required"),
+    email: z.string().email("email must be a valid address"),
+});
+
+app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) => {
+    // body.name and body.email are already validated and typed -
+    // no casts, no manual checks.
+    ctx.status(201).json(body);
+}));
+```
+
+A failing schema throws `ValidationError` (a `BadRequestError`), which
+goes through Empire's existing error pipeline automatically - no separate
+mechanism to learn. The response includes both a readable `error` string
+and a structured `details` array naming every failing field:
+
+```json
+{
+    "error": "body.name: name is required; body.email: email must be a valid address",
+    "details": [
+        { "field": "body.name", "message": "name is required" },
+        { "field": "body.email", "message": "email must be a valid address" }
+    ]
+}
+```
+
+`query` and `params` schemas validate the same way, passed alongside
+`body`:
+
+```ts
+const searchSchema = z.object({
+    q: z.string().min(1),
+    page: z.coerce.number().int().min(1).default(1),
+});
+
+app.get("/search", validate({ query: searchSchema })(async (ctx, { query }) => {
+    // query.page is a real number, not the string "2" it arrived as -
+    // ctx.query and ctx.params are always strings off the raw URL, so a
+    // schema expecting a number needs z.coerce.number(), not z.number().
+    const results = await search(query.q, query.page);
+    ctx.json(results);
+}));
+```
+
+See `examples/10-validation` for a runnable version covering body, query
+(with coercion), and route param validation together.
+
 ## Authentication
 
 Empire does not ship authentication middleware. The framework owns the
@@ -540,6 +606,7 @@ npx tsx examples/02-routing/server.ts
 | `07-body-size-limit` | 8007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
 | `08-authentication` | 8008 | A worked example of writing your own auth middleware: Bearer token parsing, `WWW-Authenticate` on rejection, and handing an identity to route handlers via `ctx.state` |
 | `09-dependency-injection` | 8009 | The DI container wired into a real app: a singleton in-memory repository backing three `/records` routes, and a scoped service that calls an "upstream" API over a real HTTP request via `ctx.services` |
+| `10-validation` | 8010 | `validate()` covering body, query (with `z.coerce` for the all-strings-off-the-URL gotcha), and route param validation, each with a passing and a failing request |
 
 ## Testing
 
@@ -568,9 +635,12 @@ aborted download - is exactly what a mock gets wrong.
 | `RouteMatcher` | `tests/unit/routing/RouteMatcher.test.ts` |
 | `StaticFileHandler` | `tests/unit/static/StaticFileHandler.test.ts` |
 | `MimeTypes` | `tests/unit/static/MimeTypes.test.ts` |
-| `HttpError`, `BadRequestError` | `tests/unit/errors/HttpError.test.ts`, `tests/unit/errors/BadRequestError.test.ts` |
+| `HttpError`, `BadRequestError`, `ValidationError` | `tests/unit/errors/HttpError.test.ts`, `tests/unit/errors/BadRequestError.test.ts`, `tests/unit/errors/ValidationError.test.ts` |
+| `sendErrorResponse` | `tests/unit/errors/sendErrorResponse.test.ts` |
 | `ConsoleLogger` | `tests/unit/logging/ConsoleLogger.test.ts` |
 | `LoggerMiddleware` | `tests/unit/middleware/BuiltInMiddleware.test.ts` |
+| `ServiceCollection`, `ServiceProvider`, `ServiceScope`, `createToken` | `tests/unit/di/ServiceCollection.test.ts`, `tests/unit/di/ServiceProvider.test.ts`, `tests/unit/di/ServiceScope.test.ts`, `tests/unit/di/ServiceToken.test.ts` |
+| `validate` | `tests/unit/validation/validate.test.ts` |
 
 ### Integration tests
 
@@ -595,6 +665,12 @@ the full request pipeline rather than inside a single class:
 * `ExampleAuth.test.ts` - the `examples/08-authentication` middleware's
   actual HTTP-facing behavior: status codes, `WWW-Authenticate`, and the
   identical rejection body for an unknown token versus a disabled account
+* `DependencyInjection.test.ts` - resolution inside a real route handler,
+  singleton sharing across requests, scoped isolation per request, and
+  disposal timing after the response ends
+* `Validation.test.ts` - `validate()` over real requests: a passing body,
+  a failing body with field-level `details`, query coercion, and that the
+  handler never runs at all when validation fails
 
 Two tests are manual-only exceptions, gated behind an environment
 variable and excluded from `npm test`, because both are flaky under
@@ -626,11 +702,13 @@ empire/
 │   ├── routing/        Route, RouteMatch, RouteMatcher, Router
 │   ├── middleware/      LoggerMiddleware
 │   ├── static/          MimeTypes, StaticFileHandler and its option types
-│   ├── errors/          HttpError, BadRequestError, HttpErrorOptions
+│   ├── errors/          HttpError, BadRequestError, HttpErrorOptions,
+│   │                     ValidationError, ValidationIssue, sendErrorResponse
 │   ├── logging/         ILogger, ConsoleLogger
-│   └── di/              ServiceCollection, ServiceProvider, ServiceScope,
-│                         ServiceToken, Lifetime, Disposable, and their
-│                         supporting types (Resolver, Factory, ServiceDescriptor)
+│   ├── di/              ServiceCollection, ServiceProvider, ServiceScope,
+│   │                     ServiceToken, Lifetime, Disposable, and their
+│   │                     supporting types (Resolver, Factory, ServiceDescriptor)
+│   └── validation/      validate(), ValidationSchemas, Validated
 ├── examples/
 │   ├── 01-basic-server/
 │   ├── 02-routing/
@@ -640,7 +718,8 @@ empire/
 │   ├── 06-react-app/
 │   ├── 07-body-size-limit/
 │   ├── 08-authentication/
-│   └── 09-dependency-injection/
+│   ├── 09-dependency-injection/
+│   └── 10-validation/
 ├── tests/
 │   ├── unit/
 │   ├── integration/

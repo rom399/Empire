@@ -20,8 +20,7 @@ Empire should eventually support:
 
 ## Current Version
 
-0.15.0 — Dependency Injection (DI-1 through DI-8 complete; DI-9 final
-test pass in progress)
+0.16.0 — Validation (V-1 through V-6 complete)
 
 **v1.0.0 blockers:** none. All Priority items are resolved — see below.
 Phase 9.1 (routing test/example coverage), Phase 9.3 (all 13 bug-hunt
@@ -1278,16 +1277,31 @@ for the real API.
 
 ---
 
-## Phase 11 — Validation
+## Phase 11 — Validation ✅
+
+Full design lives in `doc/features/VALIDATION.md`. Zod chosen over a
+hand-rolled validator (the first deliberate exception to Empire's
+zero-dependency rule - see that doc's §2.1 for why); `ValidationError`
+(not `ValidationException` below - see that doc's §2.3/§8) extends the
+existing `BadRequestError`.
 
 ### Tasks
 
-* Body validation
-* Query validation
-* Route parameter validation
-* Schema validation
-* ValidationException
-* Automatic 400 responses
+* ✅ Body validation — `validate({ body })`, `src/validation/validate.ts`
+* ✅ Query validation — `validate({ query })`, including `z.coerce.*` for
+  the all-strings-off-the-URL gotcha documented in the design doc
+* ✅ Route parameter validation — `validate({ params })`
+* ✅ Schema validation — Zod, `ZodType<T>`
+* ✅ ~~ValidationException~~ — `ValidationError`, `src/errors/ValidationError.ts`
+  (naming departure from this task's original wording, deliberate - see
+  `doc/features/VALIDATION.md` §2.3/§8)
+* ✅ Automatic 400 responses — thrown `ValidationError` goes through
+  Empire's existing `HttpError`/`sendErrorResponse.ts` pipeline unchanged,
+  with an additive `details` field in the JSON response
+
+Example: `examples/10-validation/server.ts`. Tests: `tests/unit/errors/ValidationError.test.ts`,
+`tests/unit/errors/sendErrorResponse.test.ts`, `tests/unit/validation/validate.test.ts`,
+`tests/integration/Validation.test.ts`.
 
 ---
 

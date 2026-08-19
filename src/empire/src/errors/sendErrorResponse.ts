@@ -1,5 +1,6 @@
 import http from "http";
 import { HttpError } from "./HttpError";
+import { ValidationError } from "./ValidationError";
 import { ILogger } from "../logging/ILogger";
 
 /**
@@ -24,7 +25,15 @@ export function sendErrorResponse(
     if (err instanceof HttpError) {
         res.statusCode = err.statusCode;
         res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ error: err.message }));
+
+        // Additive: every other HttpError keeps its existing { error }-only
+        // shape. Only a ValidationError gains the extra field, so nothing
+        // that already reads a plain HttpError's response body changes.
+        const body = err instanceof ValidationError
+            ? { error: err.message, details: err.details }
+            : { error: err.message };
+
+        res.end(JSON.stringify(body));
         return;
     }
 

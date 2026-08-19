@@ -3,14 +3,15 @@
 ## Overview
 
 Empire is a lightweight TypeScript HTTP web framework built from scratch on Node's
-built-in `http` module. It has no runtime dependencies. The design is inspired by
-ASP.NET Core — middleware pipelines, dependency injection, strongly-typed context,
-and a clean separation of concerns.
+built-in `http` module. Routing, middleware, the HTTP layer, and the DI container
+are all zero-dependency; `src/validation/` (Phase 11) is the one deliberate
+exception, depending on Zod - see `doc/features/VALIDATION.md` §2.1 for why.
+The design is inspired by ASP.NET Core — middleware pipelines, dependency
+injection, strongly-typed context, and a clean separation of concerns.
 
-Current version: **0.15.0 — Dependency Injection (DI-1 through DI-8
-complete; DI-9 final test pass in progress)**. See `doc/PROJECT_STATE.md`
-for the up-to-date status and `PLAN.md` for the full phase-by-phase
-roadmap. No v1.0.0 blockers remain.
+Current version: **0.16.0 — Validation (V-1 through V-6 complete)**. See
+`doc/PROJECT_STATE.md` for the up-to-date status and `PLAN.md` for the full
+phase-by-phase roadmap. No v1.0.0 blockers remain.
 
 ---
 
@@ -50,6 +51,8 @@ empire/
 │   │   ├── HttpError.ts            # Base HTTP error class
 │   │   ├── HttpErrorOptions.ts     # { code?, retryable? } accepted by HttpError's constructor
 │   │   ├── BadRequestError.ts      # 400 error shorthand
+│   │   ├── ValidationError.ts      # BadRequestError + structured field-level details (Phase 11)
+│   │   ├── ValidationIssue.ts      # { field, message } - one entry in ValidationError.details
 │   │   └── sendErrorResponse.ts    # Converts a thrown error into a JSON error response
 │   ├── static/
 │   │   ├── MimeTypes.ts            # Extension → MIME type lookup, 17 extensions
@@ -72,6 +75,11 @@ empire/
 │   │   ├── ServiceProvider.ts      # Root container — resolve(), createScope(), dispose()
 │   │   ├── ServiceScope.ts         # Per-request scope — resolve(), dispose()
 │   │   └── Disposable.ts           # Disposable interface + isDisposable() type guard
+│   ├── validation/                 # Schema-based validation (Phase 11) — see
+│   │   │                           # doc/features/VALIDATION.md for the full design
+│   │   ├── validate.ts             # Wraps a handler with body/query/params validation
+│   │   ├── ValidationSchemas.ts    # { body?, query?, params? } schemas accepted by validate()
+│   │   └── Validated.ts            # { body, query, params } passed to the wrapped handler
 │   ├── types.ts                    # Middleware, RouteHandler types
 │   └── Empire.ts                   # Main framework class — server lifecycle, middleware, delegates routing to Router
 │
@@ -80,15 +88,17 @@ empire/
 │   │   ├── Empire.test.ts          # Server lifecycle, routing delegation, graceful shutdown
 │   │   ├── routing/                # Router, RouteMatcher, RouterEdgeCases (FINDING 10-12)
 │   │   ├── http/                   # Context, ContextBody (FINDING 6-7)
-│   │   ├── errors/                 # HttpError (FINDING 13), BadRequestError
+│   │   ├── errors/                 # HttpError (FINDING 13), BadRequestError, ValidationError,
+│   │   │                           # sendErrorResponse
 │   │   ├── static/                 # StaticFileHandler (FINDING 2, 9)
 │   │   ├── logging/
 │   │   ├── middleware/             # BuiltInMiddleware (FINDING 5)
-│   │   └── di/                     # ServiceCollection, ServiceProvider, ServiceScope, ServiceToken
+│   │   ├── di/                     # ServiceCollection, ServiceProvider, ServiceScope, ServiceToken
+│   │   └── validation/             # validate() - body/query/params, pass and failure cases
 │   ├── integration/                # Real-server tests: ContextSharing, MiddlewarePipeline,
 │   │                                # RequestBody, FileStreaming (FINDING 1, 3, 4, 6-8),
 │   │                                # DependencyInjection, ExampleAuth, HttpVerbs,
-│   │                                # MalformedRequestPath, RoutingPatterns — see
+│   │                                # MalformedRequestPath, RoutingPatterns, Validation — see
 │   │                                # PLAN.md Phase 9.3
 │   ├── http/
 │   │   ├── empire.http             # REST client tests
@@ -109,15 +119,19 @@ empire/
 │   ├── 06-react-app/               # SPA support — spaFallback, streaming, index.html fallback, API routes
 │   ├── 07-body-size-limit/         # Configurable request body size limit, 413 on oversized bodies
 │   ├── 08-authentication/          # Writing your own auth middleware — Bearer tokens, ctx.state
-│   └── 09-dependency-injection/    # DI container wired into a real app — singleton repository,
-│                                    # scoped service calling a real HTTP endpoint via ctx.services
+│   ├── 09-dependency-injection/    # DI container wired into a real app — singleton repository,
+│   │                                # scoped service calling a real HTTP endpoint via ctx.services
+│   └── 10-validation/              # validate() wired into real routes — body, query
+│                                    # (with coercion), and route param validation
 │
 ├── doc/
 │   ├── ARCHITECTURE.md             # This file
 │   ├── PROJECT_STATE.md            # Current status and next steps
 │   └── features/                   # One doc per in-flight or completed feature build
-│       └── DEPENDENCY_INJECTION.md # Full DI design: tokens, lifetimes, scoping, disposal,
-│                                    # graceful shutdown, decisions log
+│       ├── DEPENDENCY_INJECTION.md # Full DI design: tokens, lifetimes, scoping, disposal,
+│       │                           # graceful shutdown, decisions log
+│       └── VALIDATION.md           # Full validation design: the Zod dependency decision,
+│                                    # validate() wrapper, ValidationError, decisions log
 │
 ├── PLAN.md                         # Full phase-by-phase roadmap
 ├── CONTRIBUTING.md                 # Contribution conventions
@@ -361,6 +375,21 @@ throw new BadRequestError("productId is required");
 // → { "error": "productId is required" } with status 400
 ```
 
+### `ValidationError` — `src/errors/ValidationError.ts`
+
+Extends `BadRequestError` with a structured `details: ValidationIssue[]`
+field (`{ field, message }` per failing field), thrown by `validate()` —
+see "Validation" below. `message` stays a single readable string, so
+`sendErrorResponse.ts`'s handling of any other `HttpError` is unaffected;
+`details` is additive to the JSON response only when the thrown error is
+actually a `ValidationError`.
+
+```ts
+throw new ValidationError([{ field: "body.email", message: "Required" }]);
+// → { "error": "body.email: Required", "details": [{ "field": "body.email", "message": "Required" }] }
+// with status 400
+```
+
 ---
 
 ### `StaticFileHandler` — `src/static/StaticFileHandler.ts`
@@ -559,6 +588,41 @@ Route:   /users/:id/posts
 Request: /users/42/posts
 Result:  ctx.params.id === "42"
 ```
+
+---
+
+## Validation
+
+`validate()` — `src/validation/validate.ts` — wraps a `RouteHandler` with
+schema-based validation of the request body, query string, and/or route
+params, the same way `createLoggerMiddleware(logger)` wraps a middleware
+around a dependency. It needs zero changes to `Router`'s registration
+methods or `Context`'s frozen API — a route registers a `validate(...)`-wrapped
+handler exactly like any other:
+
+```ts
+const createUserSchema = z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+});
+
+app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) => {
+    // body.name and body.email are already validated and typed
+    ctx.status(201).json(body);
+}));
+```
+
+A failing schema throws `ValidationError`, which `Router` already catches
+through the same pipeline as any other `HttpError` — no separate error
+mechanism.
+
+**`ctx.query` and `ctx.params` are always strings.** Both come off the raw
+URL, so a query param intended as a number (`?page=2`) arrives as the
+string `"2"` — schemas validating them need `z.coerce.number()` rather
+than `z.number()`, or a well-formed request fails validation.
+
+Full design, the Zod dependency decision, and the decisions log live in
+`doc/features/VALIDATION.md`.
 
 ---
 

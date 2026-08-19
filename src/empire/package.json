@@ -7,7 +7,12 @@
     "start": "tsx examples/01-basic-server/server.ts",
     "dev": "tsx watch examples/01-basic-server/server.ts"
   },
-  "keywords": ["typescript", "http", "web-framework", "middleware"],
+  "keywords": [
+    "typescript",
+    "http",
+    "web-framework",
+    "middleware"
+  ],
   "author": "Roman",
   "license": "MIT",
   "type": "commonjs",
@@ -16,5 +21,8 @@
     "tsx": "^4.22.4",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }
