@@ -2,7 +2,8 @@
 
 ## Status
 
-**Not started.** Created 2026-08-16.
+**Complete.** Created 2026-08-16. All four content steps and final
+verification are done — see Step 5 below.
 
 ## Scope
 
@@ -191,13 +192,17 @@ passing (same run as Step 2 above — both steps landed in one edit pass).
   change needed; it already correctly documents the 403 and prefix-matching
   behavior this step only added test coverage for, not new behavior
 
-## Step 5 — Final verification
+## Step 5 — Final verification ✅
 
-- [ ] `npx tsc --noEmit` clean
-- [ ] `npx vitest run` — full suite green, note new total test count
-- [ ] Confirm no regressions in existing `Empire.test.ts` and
-  `StaticFileHandler.test.ts` tests — both extended, not rewritten
-- [ ] If `tests/integration/FileStreaming.test.ts`'s abort-mid-stream test
-  is the only failure in a full-suite run, re-run it in isolation before
-  assuming a regression — known pre-existing flake, untouched by this work
-  (see `doc/PROJECT_STATE.md`)
+- [x] `npx tsc --noEmit` clean
+- [x] `npx vitest run` — full suite green (test count has moved on since
+  Step 4's snapshot due to unrelated later work; see
+  `doc/PROJECT_STATE.md` for the current total, not this doc)
+- [x] Confirmed no regressions in `Empire.test.ts` and
+  `StaticFileHandler.test.ts` — both extended, not rewritten; re-verified
+  directly (39/39 passing across the two files)
+- [x] `tests/integration/FileStreaming.test.ts`'s abort-mid-stream test is
+  no longer a live concern for this checklist item - it's since been
+  gated behind `RUN_FLAKY_TESTS` and excluded from `npm test` entirely
+  (unrelated later work), so it can no longer show up as a failure in a
+  normal full-suite run at all
