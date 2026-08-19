@@ -1,6 +1,6 @@
 # Empire — Dependency Injection: Design & Build Doc
 
-**Status:** Draft
+**Status:** Implemented — DI-1 through DI-9 all complete and shipped (see §3)
 **Scope:** Empire (native TypeScript webserver, zero external dependencies)
 
 ## 1. Context & Goals
@@ -150,6 +150,8 @@ server.on('request', (req, res) => {
 
 Route handlers pull dependencies from `req.services.resolve(...)` instead of importing singletons directly. `createScope()` itself stays synchronous — only `resolve()` is async — so attaching a scope per request doesn't change this handler at all.
 
+**This is illustrative, not what actually shipped.** The real wiring is in `Empire.handleRequest()`/`Context.ts`: the scope becomes `ctx.services` (typed as the narrower `Resolver`, not `ServiceScope` — a handler can `resolve()` but has no way to reach `dispose()`), and disposal is registered on **both** `res.once("finish", ...)` and `res.once("close", ...)`, not just `"finish"` as above — `dispose()` is idempotent, so covering the client-disconnect case too is free. See §8's 2026-08-18 decisions for the rest of the HTTP-integration adaptations.
+
 ### 2.7 Disposal
 
 Anything registered as scoped/transient that implements a `dispose(): void` method gets tracked by the scope and disposed when the scope ends (request finishes). Singleton disposal happens during graceful shutdown — see §2.8.
@@ -230,6 +232,8 @@ function isDisposable(x: unknown): x is { dispose(): void | Promise<void> } {
 
 Note `closeIdleConnections()` and `closeAllConnections()` are native `http.Server` methods (Node 18.2+) — no library needed, but worth confirming your Node version supports them.
 
+**One simplification versus the pseudocode above:** the real `ServiceProvider` doesn't keep a separate `constructionOrder` array. `Map` iteration order in JS/TS follows insertion order, and a singleton is only ever inserted into the `singletons` map once (guarded by its own cache check) — so reversing the map's own entries directly gives reverse construction order, with no parallel state to keep in sync.
+
 ## 3. Build order / milestones
 
 - [x] **DI-1: Tokens & types** — `ServiceToken`, `createToken`, `Lifetime`, `ServiceDescriptor`, `Resolver` (`resolve` returns `Promise<T>`; `Factory<T>` accepts sync or async)
@@ -241,9 +245,21 @@ Note `closeIdleConnections()` and `closeAllConnections()` are native `http.Serve
 - [x] **DI-7a: Proof of concept — API client.** Build `IHttpClient` / `NodeHttpClient`, wire `UpstreamApiService` through the container (§4.2) — `examples/09-dependency-injection/server.ts`
 - [x] **DI-7b: Proof of concept — exposed endpoints.** Build the sample repository, expose the three record endpoints off one shared singleton (§4.3) — same example file
 - [x] **DI-8: Graceful shutdown** — idle-connection close, timeout-forced close, `ServiceProvider.dispose()` in reverse construction order, all wired into `Empire.stop()`. No auto-registered `SIGTERM`/`SIGINT` handler — that stays application-level, see §8's 2026-08-18 decisions
-- [ ] **DI-9: Tests** — see §5 (this final review pass)
+- [x] **DI-9: Tests** — see §5; every minimum-coverage item verified against the real test suite, plus two real bugs found and fixed in the process (see §8's 2026-08-19 entries)
 
 ## 4. Examples
+
+§4.2 and §4.3 below became the real, runnable proof of concept at
+`examples/09-dependency-injection/server.ts` (DI-7a/DI-7b, both combined
+into one composition root rather than shipped separately). §4.1 (the
+proxy route) was never built as a real example - it's design illustration
+only. The shipped example simplified a few of the illustrative types
+below to things that actually exist in Empire: `Config`/`Logger` became a
+plain `baseUrl: string` plus Empire's real `ILogger` (there's no `Config`
+service in Empire), and `Record` was renamed to `DataRecord` specifically
+to avoid shadowing TypeScript's built-in `Record<K, V>` utility type. The
+rest of the shape - tokens, lifetimes, the testing-without-a-container
+argument in §4.2 Step 4 - carried through unchanged.
 
 ### 4.1 Proxy route
 
@@ -514,18 +530,24 @@ No external test runner needed — Node's built-in `node:test` + `node:assert/st
 
 Minimum coverage:
 
-- [ ] Singleton: two `resolve()` calls (including across different scopes) return the same instance
-- [ ] Concurrent `resolve()` calls on an unbuilt async singleton construct it exactly once — the in-flight promise is cached, not just the settled value
-- [ ] Transient: two `resolve()` calls return different instances
-- [ ] Scoped: same instance within one scope, different instance across two separate scopes
-- [ ] Resolving an unregistered token throws a clear error naming the token
-- [ ] Registering the same token twice crashes the process (`process.exit(1)`) with a message naming the token and both lifetimes — not a catchable throw
-- [ ] Registering a token after `build()` has been called crashes the process the same way
-- [ ] Resolving a scoped token from the root provider (no active scope) throws
-- [ ] Circular dependency (A → B → A) throws with the cycle path in the error message
-- [ ] `scope.dispose()` calls `dispose()` on every scoped instance that has one, and only once
-- [ ] `provider.dispose()` disposes constructed singletons in reverse construction order
-- [ ] `provider.dispose()` continues disposing remaining singletons even if one instance's `dispose()` throws
+- [x] Singleton: two `resolve()` calls (including across different scopes) return the same instance
+- [x] Concurrent `resolve()` calls on an unbuilt async singleton construct it exactly once — the in-flight promise is cached, not just the settled value
+- [x] Transient: two `resolve()` calls return different instances
+- [x] Scoped: same instance within one scope, different instance across two separate scopes
+- [x] Resolving an unregistered token throws a clear error naming the token
+- [x] Registering the same token twice crashes the process (`process.exit(1)`) with a message naming the token and both lifetimes — not a catchable throw
+- [x] Registering a token after `build()` has been called crashes the process the same way
+- [x] Resolving a scoped token from the root provider (no active scope) throws
+- [x] Circular dependency (A → B → A) throws with the cycle path in the error message
+- [x] `scope.dispose()` calls `dispose()` on every scoped instance that has one, and only once
+- [x] `provider.dispose()` disposes constructed singletons in reverse construction order
+- [x] `provider.dispose()` continues disposing remaining singletons even if one instance's `dispose()` throws
+
+All covered in `tests/unit/di/` (`ServiceCollection.test.ts`, `ServiceProvider.test.ts`,
+`ServiceScope.test.ts`, `ServiceToken.test.ts`) plus real-request coverage in
+`tests/integration/DependencyInjection.test.ts` and `tests/unit/Empire.test.ts`'s
+"graceful shutdown" block. Coverage goes beyond this minimum list too — see
+§8's 2026-08-19 entries for two real bugs the extra tests caught.
 
 ```ts
 import test from 'node:test';
@@ -673,6 +695,8 @@ None currently — add new questions here as they come up.
 - **2026-08-17** — Container sealing: `ServiceCollection` seals itself in `build()`; any `addSingleton`/`addScoped`/`addTransient` call afterward hard-crashes the same way a duplicate registration does. `build()` also hands the provider a copied `Map`, not a live reference to the collection's own map. Reasoning: without this, nothing stops registration from happening somewhere other than the composition root, including after the provider is already resolving requests.
 - **2026-08-18** — Shutdown timeout source: section 2.8's pseudocode reads `Config.shutdownTimeoutMs` off a DI-resolved `Config` service. Empire has no such service - `Config` there was illustrative, not a real Empire type. Implemented instead as `EmpireOptions.shutdownTimeoutMs?: number` (default 10,000ms), following the same options-object pattern as the existing `maxBodySize?`. No DI resolution needed at shutdown time as a result.
 - **2026-08-18** — Signal handling: section 2.8's pseudocode calls `process.on('SIGTERM'/'SIGINT', shutdown)` itself. Empire does not register these - `Empire.stop()` contains all the graceful-shutdown mechanics (idle-connection close, timeout race, forced close, service disposal), but deciding when to call it stays the application's job, exactly matching the pattern every example in `examples/` already used before DI-8 existed. Reasoning: a library registering process-wide signal handlers as a side effect of construction is a surprising global side effect, and would be actively harmful here - many short-lived `Empire` instances (this project's own test suite constructs dozens) would each leak a listener and risk interfering with, e.g., a test runner's own `Ctrl+C` handling. Documented in README.MD's new "Server Lifecycle" section.
+- **2026-08-19** — Bug found while writing DI-9's test suite: a factory that throws *synchronously* (rather than returning a rejected `Promise`) escaped `resolve()` as a raw throw instead of a rejection, breaking the "resolve() always returns a Promise" contract every caller in this doc relies on (§2.4). `construct()` in both `ServiceProvider` and `ServiceScope` now wraps the factory call in `try/catch` and converts a synchronous throw into `Promise.reject(err)`. Caught by a dedicated regression test in each class before it could surface as a real bug.
+- **2026-08-19** — Second bug found the same way: `dispose()` awaited each tracked instance's promise directly, so an instance that had *failed to construct* (its own `resolve()` call already rejected) caused `dispose()` itself to re-throw that original construction error instead of just skipping it - there's nothing to dispose of in that case. Fixed in both `ServiceProvider.dispose()` and `ServiceScope.dispose()` with a `try/catch` around the `await` that `continue`s past a failed instance rather than propagating its error.
 
 ## 9. README structure (for the DI section)
 
