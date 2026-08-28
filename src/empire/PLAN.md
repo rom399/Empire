@@ -504,9 +504,13 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * .npmignore — excludes src/, tests/, examples/ from npm publish
 * Project restructured to Empire layout
 * GitHub Actions CI (`.github/workflows/ci.yml`, at the git repo root —
-  `D:/dev/ROM/.github/`, not under `empire/`) — runs `npm ci`, `npx tsc
-  --noEmit`, and `npx vitest run` on every push to `main` and every pull
-  request, scoped to the `src/empire` project root
+  `D:/dev/ROM/.github/`, not under `empire/`) — runs `npm ci` then `npm
+  run verify` on every push to `main` and every pull request, scoped to
+  the `src/empire` project root. Originally ran `npx tsc --noEmit` and
+  `npx vitest run` as separate steps; later folded into one `verify`
+  script (`typecheck && test && examples`) so CI and local dev run the
+  identical command — see `scripts/run-examples.ts`, which smoke-tests
+  every app in `examples/`
 * Dependabot (`.github/dependabot.yml`) — weekly update PRs for npm
   dependencies in `src/empire` and for the GitHub Actions versions pinned
   in the CI workflow

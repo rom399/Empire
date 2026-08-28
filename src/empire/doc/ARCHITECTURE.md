@@ -133,6 +133,11 @@ empire/
 │       └── VALIDATION.md           # Full validation design: the Zod dependency decision,
 │                                    # validate() wrapper, ValidationError, decisions log
 │
+├── scripts/
+│   └── run-examples.ts             # Smoke-tests every examples/ app — run via `npm run examples`,
+│                                    # part of `npm run verify` and CI
+├── .claude/skills/                 # commit-message, empire-feature, empire-review
+├── CLAUDE.md                       # Always-true facts only — loads every agent turn
 ├── PLAN.md                         # Full phase-by-phase roadmap
 ├── CONTRIBUTING.md                 # Contribution conventions
 ├── package.json
@@ -142,10 +147,14 @@ empire/
 CI (`.github/workflows/ci.yml`) and Dependabot (`.github/dependabot.yml`)
 config live at the git repo root (`D:/dev/ROM/.github/`), one level above
 `empire/` — not shown in the tree above since it sits outside the project
-root this document describes. CI runs `npm ci`, `tsc --noEmit`, and
-`vitest run` (scoped to `src/empire`) on every push to `main` and every
-pull request; Dependabot opens weekly update PRs for npm dependencies and
-for the Actions versions the workflow pins.
+root this document describes. CI runs `npm ci` then `npm run verify`
+(scoped to `src/empire`) on every push to `main` and every pull request —
+the same command a contributor runs locally, chaining `tsc --noEmit`,
+`vitest run`, and `scripts/run-examples.ts` (smoke-tests every example in
+`examples/`: starts each one, confirms it responds to a real request,
+then shuts it down via the same `SIGINT` its own handler listens for).
+Dependabot opens weekly update PRs for npm dependencies and for the
+Actions versions the workflow pins.
 
 ---
 

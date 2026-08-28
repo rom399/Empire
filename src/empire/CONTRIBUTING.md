@@ -173,9 +173,10 @@ Every class must have a corresponding test file.
 - Test file named exactly: `ClassName.test.ts`
 - Use Vitest for all tests
 - Shared helpers and mock services go in `tests/fixtures/`
-- CI (`.github/workflows/ci.yml`) runs `tsc --noEmit` and `vitest run`
-  automatically on every pull request — a PR won't merge cleanly until
-  both pass
+- CI (`.github/workflows/ci.yml`) runs `npm run verify` automatically on
+  every pull request — the same command as running it locally (`tsc
+  --noEmit`, `vitest run`, then a smoke test of every `examples/` app) —
+  a PR won't merge cleanly until it passes
 
 ### Test Naming
 
