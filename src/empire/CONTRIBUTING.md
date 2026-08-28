@@ -23,15 +23,15 @@ empire/
 │   ├── errors/             # HttpError and derived error types
 │   ├── static/             # Static file serving
 │   ├── di/                 # Dependency injection
+│   ├── validation/         # Schema-based request validation
 │   ├── routing/            # Router and route matching
-│   ├── gateway/            # Gateway and load balancing
 │   └── Empire.ts           # Main entry point
 ├── tests/
 │   ├── unit/               # Vitest unit tests — mirrors src/ structure
 │   ├── http/               # REST client test files (.http)
 │   └── fixtures/           # Shared test helpers, mocks and test data
 ├── examples/               # Example applications — not published to npm
-└── docs/                   # Documentation
+└── doc/                    # Documentation
 ```
 
 ### Rules
@@ -207,7 +207,6 @@ describe('ServiceCollection', () => {
 
     describe('addSingleton', () => {
 
-        // provider.resolve() is DI-3 — this is the target shape once it lands
         it('returns the same instance on every resolution', async () => {
             const services = new ServiceCollection();
             const logger = new TestLogger();

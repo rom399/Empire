@@ -5,7 +5,10 @@
   "scripts": {
     "test": "vitest run",
     "start": "tsx examples/01-basic-server/server.ts",
-    "dev": "tsx watch examples/01-basic-server/server.ts"
+    "dev": "tsx watch examples/01-basic-server/server.ts",
+    "typecheck": "tsc --noEmit",
+    "examples": "tsx scripts/run-examples.ts",
+    "verify": "npm run typecheck && npm run test && npm run examples"
   },
   "keywords": [
     "typescript",

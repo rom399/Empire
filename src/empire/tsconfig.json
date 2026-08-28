@@ -11,6 +11,6 @@
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist"
   },
-  "include": ["src/**/*", "examples/**/*"],
+  "include": ["src/**/*", "examples/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "dist"]
 }
