@@ -115,14 +115,20 @@ function waitForExit(child: ChildProcess, timeoutMs: number): Promise<number | n
 async function runExample(example: Example): Promise<void> {
     console.log(`\n--- ${example.name} (port ${example.port}) ---`);
 
-    // CI (this script's actual target) runs on Linux, where spawn("npx", ...)
-    // works directly - no shell needed, no warning. Windows needs shell:true
-    // to run npx.cmd at all; Node warns about that combined with an args
-    // array (unescaped arguments), which doesn't apply here since
-    // example.serverPath comes from a local directory listing, never
-    // untrusted input - scoped to Windows only so CI never sees it.
-    const child = spawn("npx", ["tsx", example.serverPath], {
+    // Spawn tsx's own binary directly, not "npx tsx". npx is a wrapper
+    // process - a real CI run showed SIGINT sent to it does not reliably
+    // reach the actual node/tsx process running underneath, so the
+    // example's own shutdown handler never saw it. Resolving the local
+    // binary path means the spawned child IS the example process, and
+    // kill("SIGINT") below reaches its handler directly, no forwarding.
+    const tsxBin = join(
+        __dirname, "..", "node_modules", ".bin",
+        process.platform === "win32" ? "tsx.cmd" : "tsx"
+    );
+    const child = spawn(tsxBin, [example.serverPath], {
         stdio: "inherit",
+        // .cmd files can't be spawned directly on Windows without a
+        // shell; the real POSIX binary on the CI runner needs none.
         shell: process.platform === "win32",
     });
 
