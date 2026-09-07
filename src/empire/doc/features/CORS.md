@@ -181,6 +181,59 @@ responses:
 - **`origin: "*"`** - the response is unconditionally `Access-Control-Allow-Origin: *` for every request, never varies - no `Vary: Origin` needed.
 - **Anything else** (string, `string[]`, function) - the response depends on the incoming `Origin`, so set `Vary: Origin` whenever this middleware runs. Append to any existing `Vary` value rather than overwriting it, in case something else (a future compression middleware, for instance) already set one.
 
+### 2.6 Multiple policies for different endpoint groups (the cheap option)
+
+Resolves what had been the "single global policy only" limitation in §7,
+without Empire gaining real route-scoped middleware - see
+`PLAN.md` Phase 3's "Route-level middleware" (remaining, unstarted) and
+`doc/ARCHITECTURE.md`'s Known Architectural Issues for that larger,
+separate effort. This is a narrower, CORS-specific workaround: since
+`createCorsMiddleware()` already sees `ctx.path` on every request, it can
+pick a different policy based on the path entirely within its own
+function body, without `Router` or `Empire.ts` involvement at all - the
+same "middleware needs only its own config" precedent held throughout
+this design.
+
+```ts
+export interface CorsPolicy {
+    /** Matches the request path this policy applies to. */
+    match: (path: string) => boolean;
+    options: CorsOptions;
+}
+
+export type CorsConfig = CorsOptions | { policies: CorsPolicy[]; fallback?: CorsOptions };
+
+export function createCorsMiddleware(config: CorsConfig): Middleware { /* ... */ }
+```
+
+```ts
+app.use(createCorsMiddleware({
+    policies: [
+        { match: (path) => path.startsWith("/api/admin"), options: { origin: ["https://admin.example.com"], credentials: true } },
+        { match: (path) => path.startsWith("/api/public"), options: { origin: "*" } },
+    ],
+    // No fallback here - a path matching neither policy gets no CORS
+    // headers at all, same as if this middleware weren't registered.
+}));
+```
+
+- **First match wins** - the same precedence rule Empire's own routing
+  already uses (documented in `README.MD`'s Routing section), not a new
+  convention to learn.
+- **No matching policy and no `fallback`** - the request passes through
+  with no CORS headers touched, exactly as if the middleware weren't
+  there for that path. Not an error, not a default-deny - CORS being
+  absent for a path is a legitimate, common case (e.g. same-origin-only
+  endpoints mixed with public ones on the same server).
+- **The credentials + wildcard-origin guard (§2.4) applies per policy**,
+  not once globally - `createCorsMiddleware()` validates every policy's
+  `options` (and `fallback`'s, if present) at creation time, so a mistake
+  in any one policy still crashes loudly before the server starts,
+  exactly as a single flat `CorsOptions` misconfiguration would.
+- A plain `CorsOptions` (today's shape) keeps working unchanged - `policies`
+  is an alternative shape for `createCorsMiddleware()`'s argument, not a
+  breaking change to the existing one.
+
 ## 3. Build order / milestones
 
 - [ ] **C-1: `CorsOptions` + `createCorsMiddleware()` skeleton** - origin matching (string/array/function), sets `Access-Control-Allow-Origin` on non-preflight responses for an allowed origin
@@ -190,9 +243,10 @@ responses:
 - [ ] **C-5: `allowedHeaders` reflection default**
 - [ ] **C-6: `exposedHeaders`** - sets `Access-Control-Expose-Headers` on the actual (non-preflight) response when configured
 - [ ] **C-7: `Vary: Origin`** - set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; omitted when it is (§2.5)
-- [ ] **C-8: Example** - `examples/11-cors/server.ts`, a real cross-origin request that only succeeds because of the middleware
-- [ ] **C-9: Tests** - see §5
-- [ ] **C-10: Docs** - README CORS section, `doc/ARCHITECTURE.md`, `PLAN.md` Phase 16 checkbox
+- [ ] **C-8: Multi-policy support** - `CorsConfig` accepting either a plain `CorsOptions` or `{ policies, fallback? }`, first-match-wins path matching, per-policy credentials+wildcard validation at creation time (§2.6)
+- [ ] **C-9: Example** - `examples/11-cors/server.ts`, a real cross-origin request that only succeeds because of the middleware
+- [ ] **C-10: Tests** - see §5
+- [ ] **C-11: Docs** - README CORS section, `doc/ARCHITECTURE.md`, `PLAN.md` Phase 16 checkbox
 
 ## 4. Examples
 
@@ -249,6 +303,10 @@ Minimum coverage, pass and failure cases both:
 - [ ] `Vary: Origin` is appended to an existing `Vary` header value (e.g. one already set by another middleware) rather than overwriting it
 - [ ] A preflight response includes a plain `Allow` header, with the same method list as `Access-Control-Allow-Methods`
 - [ ] `Allow` and `Access-Control-Allow-Methods` both reflect `CorsOptions.methods` - not the actual routes registered for the requested path, confirming the deliberate non-`Router`-derived behavior from §2.2
+- [ ] With `policies` configured, a request matching the first policy's `match()` uses that policy's `CorsOptions`, not a later policy's, even if the later one would also match
+- [ ] A request matching no policy and no `fallback` is configured gets no CORS headers touched at all - not an error, not a default-deny response
+- [ ] A request matching no policy but a `fallback` is configured uses the `fallback` options
+- [ ] A misconfigured policy (`credentials: true` + `origin: "*"`) crashes at `createCorsMiddleware()` creation time the same way a single flat `CorsOptions` misconfiguration does - confirmed for a policy other than the first one in the list, not just the first
 
 ## 6. Guardrails (over-engineering risk)
 
@@ -262,7 +320,6 @@ Minimum coverage, pass and failure cases both:
 - Default `allowedHeaders` behavior (§2.3) - reflecting back whatever the browser's preflight requested is the permissive default most CORS libraries ship with, but it is a default worth a deliberate yes/no rather than assuming, the same way Validation's dependency packaging was left open rather than silently decided.
 - **Preflight requesting a disallowed method** - if `Access-Control-Request-Method` isn't in the configured `methods` list, what should the middleware do? Still respond `204` and simply omit that method from `Access-Control-Allow-Methods` (letting the browser itself reject the follow-up request), or answer differently? Not decided.
 - **No `Origin` header at all** - same-origin requests and non-browser clients (curl, server-to-server calls) never send `Origin`. The design implies the middleware should do nothing and pass these through untouched, but this has never been stated outright, and §5's test list has no case for it.
-- **Single global policy only.** This design supports exactly one CORS policy via one `app.use(createCorsMiddleware(...))` call. A real app sometimes wants different rules per route group (e.g. a public API vs. an admin API). That isn't possible without route-scoped middleware, which Empire doesn't have yet - worth naming as a known limitation of this design rather than assuming one global policy is always sufficient. Not something this doc resolves.
 - **`maxAge` default when unset** - not stated what happens if `maxAge` isn't configured. Presumably `Access-Control-Max-Age` is simply omitted, letting the browser fall back to its own default preflight-cache duration, but this should be said explicitly rather than left to guesswork.
 
 ## 8. Decisions log
@@ -271,3 +328,4 @@ Minimum coverage, pass and failure cases both:
 - **2026-08-29** — `exposedHeaders` added to `CorsOptions` (§2.3), resolving what had briefly been an open question in §7. Sets `Access-Control-Expose-Headers` on the actual response (not the preflight) - without it, cross-origin JS can only read the small browser-safelisted set of response headers, and any app exposing custom headers (pagination info, a request-id, rate-limit headers) would have no way to make them readable cross-origin. No default - unset means nothing extra is exposed. Deliberately more conservative than `allowedHeaders`/`methods`, which both default permissively (reflecting back what was asked, or a standard method list) - those two only affect what a browser is allowed to *send*, while `exposedHeaders` controls what internal header names get revealed to cross-origin JS at all, which is a more consequential default to get wrong.
 - **2026-08-29** — `Vary: Origin` resolved and added as §2.5, closing the open question in §7. Set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; never set when it is. Reasoning: our design only echoes back `Access-Control-Allow-Origin` when the incoming request's `Origin` matches the configured allowlist, so for any non-wildcard `origin` config the response genuinely varies by request - without `Vary: Origin`, a cache in front of the app (browser cache, CDN, reverse proxy) could serve a response meant for one origin to a different one.
 - **2026-08-29** — The preflight-`Allow`-header question resolved (§2.2), closing the open question in §7: yes, include `Allow` on the preflight response, sourced from `CorsOptions.methods` - the same source as `Access-Control-Allow-Methods`. A `Router`-coupled alternative (a public `getAllowedMethodsForPath()`, `cors(router: Router)` taking a live `Router` reference for a path-exact `Allow` value) was considered and explicitly rejected: the underlying method-lookup logic already exists internally in `Router.findRoute()`, so it wasn't a matching-logic cost, but adopting it would have required a new public `Empire.router` getter and broken the "middleware needs only its own config, never a live framework object" precedent every other middleware (`createLoggerMiddleware`, `validate()`) has held to. It would also have removed the ability to deliberately expose a narrower `Access-Control-Allow-Methods` surface than what's actually implemented (a route that exists for same-origin use only, never meant to be cross-origin-callable) - keeping that an explicit, independent allowlist is a real capability worth keeping, not an oversight to fix. The resulting `Allow` header is therefore a global-config approximation, not path-exact the way `Router`'s own `Allow` is - stated explicitly in §2.2 rather than silently assumed.
+- **2026-08-29** — "Single global policy only" resolved as §2.6, closing the open question in §7 - but deliberately with the cheap option, not the complete fix. `CorsConfig` now accepts either a plain `CorsOptions` or `{ policies, fallback? }`, matched by path entirely inside `createCorsMiddleware()`'s own function body - no `Router`/`Empire.ts` involvement, consistent with every other decision in this doc. The actual underlying gap (Empire has no real route-scoped middleware at all - `examples/08-authentication` already hand-rolls the same path-checking this design now does for CORS specifically) is a separate, much larger effort, now tracked in `PLAN.md` Phase 3's "Route-level middleware" (remaining, unstarted) and named in `doc/ARCHITECTURE.md`'s Known Architectural Issues - not something this doc attempts to solve. If real route-scoped middleware is ever built, `policies`/`fallback` here becomes redundant and should collapse away in favor of it.

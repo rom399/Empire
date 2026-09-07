@@ -656,12 +656,12 @@ interface EmpireOptions {
 
 This table previously listed nine items; eight turned out to already be
 resolved (verified directly against the source below, not assumed) and
-have been moved into the Resolved list. Only one genuinely open item
-remains:
+have been moved into the Resolved list. Two genuinely open items remain:
 
 | Issue | Impact | Plan |
 |-------|--------|------|
 | Only one SPA fallback per server | Can't serve two different single-page apps from one `Empire` instance | Not currently needed; `Router.setFallback()` would need to become a list with its own matching logic if this comes up |
+| No route-scoped/path-scoped middleware - every registered middleware runs for every request, unconditionally, before routing | Can't restrict a middleware to e.g. `/admin/*` without hand-rolling path checks inside it. `examples/08-authentication` already does this by hand; `doc/features/CORS.md` §2.6 does the same thing again, specifically for per-path CORS policies, rather than wait for a real fix | Tracked in `PLAN.md` Phase 3 ("Route-level middleware", remaining, unstarted). A real fix changes `Empire.handleRequest()`'s core dispatch model - the middleware loop would need to become path-aware, not just another addition wrapped around the existing pipeline the way DI, Validation, and CORS all were |
 
 **Resolved** (kept here for history — see `doc/PROJECT_STATE.md` for current status):
 - ~~Routing lived in `Empire.ts`~~ — extracted to `src/routing/Router.ts`

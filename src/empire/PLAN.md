@@ -384,6 +384,20 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 * Optional parameters
 * Trailing slash support
 
+**Route-level middleware's concrete motivation:** `examples/08-authentication`
+already hand-rolls path-checking inside one global middleware to
+approximate this, and `doc/features/CORS.md` §2.6 does the same thing
+specifically for CORS policies (matching by path inside the middleware's
+own function body, no `Router`/`Empire.ts` changes) rather than wait for
+this. That's the actual cost of not having this yet - every feature that
+needs it re-implements its own narrow, feature-specific workaround. See
+`doc/ARCHITECTURE.md`'s Known Architectural Issues for the same point
+tracked there. Building this for real changes `Empire.handleRequest()`'s
+core dispatch model - today every registered middleware runs
+unconditionally for every request before routing; path-scoped middleware
+means that loop needs to become path-aware, not just an addition wrapped
+around the existing pipeline the way DI, Validation, and CORS all were.
+
 ---
 
 ## Phase 4 — Context
