@@ -230,9 +230,9 @@ app.use(createCorsMiddleware({
   `options` (and `fallback`'s, if present) at creation time, so a mistake
   in any one policy still crashes loudly before the server starts,
   exactly as a single flat `CorsOptions` misconfiguration would.
-- A plain `CorsOptions` (today's shape) keeps working unchanged - `policies`
-  is an alternative shape for `createCorsMiddleware()`'s argument, not a
-  breaking change to the existing one.
+- A plain `CorsOptions` (today's structure) keeps working unchanged -
+  `policies` is an alternative form `createCorsMiddleware()`'s argument
+  can take, not a breaking change to the existing one.
 
 ## 3. Build order / milestones
 
