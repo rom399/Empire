@@ -1396,6 +1396,11 @@ Phase 10 build, not as a separate "advanced" phase:
 
 ## Phase 16 — HTTP Features
 
+CORS design lives in `doc/features/CORS.md` (draft, not yet started) -
+a plain middleware via the existing `app.use()`, no new `Empire.ts`
+method, zero new dependency. The rest of this phase's tasks have no
+design doc yet.
+
 ### Tasks
 
 * Compression
