@@ -82,6 +82,27 @@ This cleanly splits ownership: the CORS middleware only ever intercepts
 *true* preflights; everything else, including `Router`'s pre-existing
 behavior, is unaffected.
 
+**The short-circuited preflight response also includes a plain `Allow`
+header**, alongside `Access-Control-Allow-Methods`, sourced from the same
+`CorsOptions.methods` - not from inspecting `Router`'s actual registered
+routes for the path. `Router.findRoute()` (private) already computes
+path-accurate allowed methods internally for its own 405/`OPTIONS`
+handling, and a `getAllowedMethodsForPath()` public method exposing that
+was considered here. Rejected: it would require a `Router` reference to
+reach the CORS middleware (`Empire` doesn't expose `router` publicly
+today - only `logger` and `services` are public getters), breaking the
+"middleware needs only its own config, never a live framework object"
+precedent `createLoggerMiddleware()`/`validate()` both established, and
+it would remove the ability to deliberately expose a *narrower* CORS
+surface than what's actually implemented (e.g. a `DELETE` route that
+exists for same-origin use only, never meant to be cross-origin-callable)
+- `Access-Control-Allow-Methods` staying an explicit, independent
+allowlist is a real capability, not an oversight. The `Allow` header this
+produces is therefore an approximation of the global CORS policy, not a
+path-exact value the way `Router`'s own `Allow` is - worth knowing if
+`methods` is configured broader than what a specific path actually
+implements.
+
 ### 2.3 Configuration Example
 
 ```ts
@@ -164,13 +185,14 @@ responses:
 
 - [ ] **C-1: `CorsOptions` + `createCorsMiddleware()` skeleton** - origin matching (string/array/function), sets `Access-Control-Allow-Origin` on non-preflight responses for an allowed origin
 - [ ] **C-2: Preflight detection & short-circuit** - `Origin` + `Access-Control-Request-Method` both present → `204` with `Access-Control-Allow-Methods`/`-Headers`/`-Max-Age`, no `next()` call
-- [ ] **C-3: Credentials + wildcard-origin guard** - throws at creation time for the invalid combination (2.4); per-request specific-origin echo when `credentials: true`
-- [ ] **C-4: `allowedHeaders` reflection default**
-- [ ] **C-5: `exposedHeaders`** - sets `Access-Control-Expose-Headers` on the actual (non-preflight) response when configured
-- [ ] **C-6: `Vary: Origin`** - set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; omitted when it is (§2.5)
-- [ ] **C-7: Example** - `examples/11-cors/server.ts`, a real cross-origin request that only succeeds because of the middleware
-- [ ] **C-8: Tests** - see §5
-- [ ] **C-9: Docs** - README CORS section, `doc/ARCHITECTURE.md`, `PLAN.md` Phase 16 checkbox
+- [ ] **C-3: `Allow` on the preflight response** - sourced from `CorsOptions.methods`, same list as `Access-Control-Allow-Methods` (§2.2); not `Router`-derived, see §2.2 for why
+- [ ] **C-4: Credentials + wildcard-origin guard** - throws at creation time for the invalid combination (2.4); per-request specific-origin echo when `credentials: true`
+- [ ] **C-5: `allowedHeaders` reflection default**
+- [ ] **C-6: `exposedHeaders`** - sets `Access-Control-Expose-Headers` on the actual (non-preflight) response when configured
+- [ ] **C-7: `Vary: Origin`** - set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; omitted when it is (§2.5)
+- [ ] **C-8: Example** - `examples/11-cors/server.ts`, a real cross-origin request that only succeeds because of the middleware
+- [ ] **C-9: Tests** - see §5
+- [ ] **C-10: Docs** - README CORS section, `doc/ARCHITECTURE.md`, `PLAN.md` Phase 16 checkbox
 
 ## 4. Examples
 
@@ -225,6 +247,8 @@ Minimum coverage, pass and failure cases both:
 - [ ] `Vary: Origin` is set on a preflight response too, not just actual responses
 - [ ] `Vary: Origin` is **not** set when `origin` is configured as the literal `"*"`
 - [ ] `Vary: Origin` is appended to an existing `Vary` header value (e.g. one already set by another middleware) rather than overwriting it
+- [ ] A preflight response includes a plain `Allow` header, with the same method list as `Access-Control-Allow-Methods`
+- [ ] `Allow` and `Access-Control-Allow-Methods` both reflect `CorsOptions.methods` - not the actual routes registered for the requested path, confirming the deliberate non-`Router`-derived behavior from §2.2
 
 ## 6. Guardrails (over-engineering risk)
 
@@ -235,7 +259,6 @@ Minimum coverage, pass and failure cases both:
 
 ## 7. Open questions / parking lot
 
-- Should a preflight response the middleware answers directly also include an `Allow` header, for consistency with `Router`'s own convention? Not required by the CORS spec either way - low priority, worth a quick decision before C-2, not a blocker for the design.
 - Default `allowedHeaders` behavior (§2.3) - reflecting back whatever the browser's preflight requested is the permissive default most CORS libraries ship with, but it is a default worth a deliberate yes/no rather than assuming, the same way Validation's dependency packaging was left open rather than silently decided.
 - **Preflight requesting a disallowed method** - if `Access-Control-Request-Method` isn't in the configured `methods` list, what should the middleware do? Still respond `204` and simply omit that method from `Access-Control-Allow-Methods` (letting the browser itself reject the follow-up request), or answer differently? Not decided.
 - **No `Origin` header at all** - same-origin requests and non-browser clients (curl, server-to-server calls) never send `Origin`. The design implies the middleware should do nothing and pass these through untouched, but this has never been stated outright, and §5's test list has no case for it.
@@ -247,3 +270,4 @@ Minimum coverage, pass and failure cases both:
 - **2026-08-29** — Spec created. Two headline decisions made up front rather than left open: (1) plain middleware via the existing `app.use()`, no new `Empire.ts` method, matching the precedent `validate()` set in Phase 11; (2) zero new dependency - CORS is pure header logic, doesn't need a library the way schema validation needed Zod. The preflight-vs-`Router`'s-existing-`OPTIONS`-handling interaction (§2.2) is the one genuinely hard part of this design and is fully specified, not left open.
 - **2026-08-29** — `exposedHeaders` added to `CorsOptions` (§2.3), resolving what had briefly been an open question in §7. Sets `Access-Control-Expose-Headers` on the actual response (not the preflight) - without it, cross-origin JS can only read the small browser-safelisted set of response headers, and any app exposing custom headers (pagination info, a request-id, rate-limit headers) would have no way to make them readable cross-origin. No default - unset means nothing extra is exposed. Deliberately more conservative than `allowedHeaders`/`methods`, which both default permissively (reflecting back what was asked, or a standard method list) - those two only affect what a browser is allowed to *send*, while `exposedHeaders` controls what internal header names get revealed to cross-origin JS at all, which is a more consequential default to get wrong.
 - **2026-08-29** — `Vary: Origin` resolved and added as §2.5, closing the open question in §7. Set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; never set when it is. Reasoning: our design only echoes back `Access-Control-Allow-Origin` when the incoming request's `Origin` matches the configured allowlist, so for any non-wildcard `origin` config the response genuinely varies by request - without `Vary: Origin`, a cache in front of the app (browser cache, CDN, reverse proxy) could serve a response meant for one origin to a different one.
+- **2026-08-29** — The preflight-`Allow`-header question resolved (§2.2), closing the open question in §7: yes, include `Allow` on the preflight response, sourced from `CorsOptions.methods` - the same source as `Access-Control-Allow-Methods`. A `Router`-coupled alternative (a public `getAllowedMethodsForPath()`, `cors(router: Router)` taking a live `Router` reference for a path-exact `Allow` value) was considered and explicitly rejected: the underlying method-lookup logic already exists internally in `Router.findRoute()`, so it wasn't a matching-logic cost, but adopting it would have required a new public `Empire.router` getter and broken the "middleware needs only its own config, never a live framework object" precedent every other middleware (`createLoggerMiddleware`, `validate()`) has held to. It would also have removed the ability to deliberately expose a narrower `Access-Control-Allow-Methods` surface than what's actually implemented (a route that exists for same-origin use only, never meant to be cross-origin-callable) - keeping that an explicit, independent allowlist is a real capability worth keeping, not an oversight to fix. The resulting `Allow` header is therefore a global-config approximation, not path-exact the way `Router`'s own `Allow` is - stated explicitly in §2.2 rather than silently assumed.
