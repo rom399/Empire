@@ -77,6 +77,11 @@ probe carries neither).
   allowed) to the response and calls `next()` as normal. `Router`'s
   existing `OPTIONS`/`Allow` behavior is completely untouched for these -
   same-origin method-discovery keeps working exactly as it does today.
+  This includes the specific case of **no `Origin` header at all** -
+  same-origin requests and non-browser clients (curl, server-to-server
+  calls) never send one. There's nothing for the middleware to check
+  against, so it does nothing and calls `next()` immediately, exactly as
+  if this middleware weren't registered.
 
 This cleanly splits ownership: the CORS middleware only ever intercepts
 *true* preflights; everything else, including `Router`'s pre-existing
@@ -103,6 +108,15 @@ path-exact value the way `Router`'s own `Allow` is - worth knowing if
 `methods` is configured broader than what a specific path actually
 implements.
 
+**A preflight requesting a method outside `CorsOptions.methods`** still
+gets a `204` - the middleware doesn't reject the preflight itself with an
+error status. `Access-Control-Allow-Methods` simply never lists the
+disallowed method, so the browser makes the enforcement decision itself
+and refuses to send the actual request. This is the standard,
+spec-conformant behavior most CORS implementations use - a preflight
+answering "here's what's actually allowed" rather than the server trying
+to detect and specially reject an unrecognized method up front.
+
 ### 2.3 Configuration Example
 
 ```ts
@@ -112,11 +126,12 @@ export interface CorsOptions {
     /** Defaults to a standard set: GET, POST, PUT, PATCH, DELETE, OPTIONS. */
     methods?: string[];
     /**
-     * Defaults to reflecting back whatever the browser's preflight asked
-     * for (Access-Control-Request-Headers) - the common permissive
-     * default most CORS libraries use, since headers aren't the
-     * sensitive part of a CORS policy the way origin/credentials are.
-     * Pass an explicit array to restrict instead.
+     * No default - an unconfigured allowedHeaders means no headers beyond
+     * CORS's own safelisted "simple" set are permitted on the actual
+     * request, regardless of what the browser's preflight claims it wants
+     * to send. Must be explicitly listed to allow anything else (e.g.
+     * ["Content-Type", "Authorization"]) - strict by default, not a
+     * reflect-back-whatever-was-asked convenience.
      */
     allowedHeaders?: string[];
     /**
@@ -130,7 +145,12 @@ export interface CorsOptions {
     exposedHeaders?: string[];
     /** Sets Access-Control-Allow-Credentials - see 2.4 for the wildcard interaction. */
     credentials?: boolean;
-    /** Access-Control-Max-Age, in seconds - how long a browser may cache one preflight result. */
+    /**
+     * Access-Control-Max-Age, in seconds - how long a browser may cache
+     * one preflight result. No default - when unset, the header is
+     * omitted entirely, and the browser falls back to its own default
+     * preflight-cache duration rather than Empire imposing one.
+     */
     maxAge?: number;
 }
 ```
@@ -145,7 +165,9 @@ DSL itself (see Guardrails).
 must not be confused: `allowedHeaders` is what the *browser* is permitted
 to *send* (answered on the preflight only); `exposedHeaders` is what
 *JavaScript* is permitted to *read* off the actual response (set on the
-real response, not the preflight).
+real response, not the preflight). Both now share the same strict
+philosophy - neither permits anything beyond the browser's own CORS
+safelist unless explicitly configured, nothing implicitly opened up.
 
 ### 2.4 The credentials + wildcard-origin conflict
 
@@ -237,10 +259,10 @@ app.use(createCorsMiddleware({
 ## 3. Build order / milestones
 
 - [ ] **C-1: `CorsOptions` + `createCorsMiddleware()` skeleton** - origin matching (string/array/function), sets `Access-Control-Allow-Origin` on non-preflight responses for an allowed origin
-- [ ] **C-2: Preflight detection & short-circuit** - `Origin` + `Access-Control-Request-Method` both present → `204` with `Access-Control-Allow-Methods`/`-Headers`/`-Max-Age`, no `next()` call
+- [ ] **C-2: Preflight detection & short-circuit** - `Origin` + `Access-Control-Request-Method` both present → `204` with `Access-Control-Allow-Methods`/`-Headers`/`-Max-Age`, no `next()` call. No `Origin` header at all → `next()` immediately, no-op (§2.2). A requested method outside `CorsOptions.methods` → still `204`, just omitted from `Access-Control-Allow-Methods` rather than rejected (§2.2)
 - [ ] **C-3: `Allow` on the preflight response** - sourced from `CorsOptions.methods`, same list as `Access-Control-Allow-Methods` (§2.2); not `Router`-derived, see §2.2 for why
 - [ ] **C-4: Credentials + wildcard-origin guard** - throws at creation time for the invalid combination (2.4); per-request specific-origin echo when `credentials: true`
-- [ ] **C-5: `allowedHeaders` reflection default**
+- [ ] **C-5: `allowedHeaders`** - sets `Access-Control-Allow-Headers` on the preflight response from the configured list only; strict by default, no reflection of `Access-Control-Request-Headers`
 - [ ] **C-6: `exposedHeaders`** - sets `Access-Control-Expose-Headers` on the actual (non-preflight) response when configured
 - [ ] **C-7: `Vary: Origin`** - set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; omitted when it is (§2.5)
 - [ ] **C-8: Multi-policy support** - `CorsConfig` accepting either a plain `CorsOptions` or `{ policies, fallback? }`, first-match-wins path matching, per-policy credentials+wildcard validation at creation time (§2.6)
@@ -283,6 +305,57 @@ Followed by the actual request, with `Access-Control-Allow-Origin` and
 a preflight approval doesn't imply the real response carries the headers
 automatically.
 
+**`allowedHeaders`, showing the strict-by-default behavior from §2.3/§8:**
+a frontend sending a Bearer token needs to send `Authorization` and
+`Content-Type: application/json` - neither is on CORS's "simple header"
+safelist, so both trigger a preflight, and both need to be explicitly
+permitted:
+
+```ts
+app.use(createCorsMiddleware({
+    origin: ["http://localhost:5173"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+app.post("/api/orders", validate({ body: createOrderSchema })(async (ctx, { body }) => {
+    // ctx.headers.authorization is readable here because the preflight
+    // below already approved it - if allowedHeaders hadn't listed it,
+    // the browser would have refused to send this request at all.
+    ctx.status(201).json(body);
+}));
+```
+
+The preflight this produces:
+
+```
+OPTIONS /api/orders HTTP/1.1
+Origin: http://localhost:5173
+Access-Control-Request-Method: POST
+Access-Control-Request-Headers: authorization, content-type
+
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: http://localhost:5173
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+```
+
+Note that `Access-Control-Allow-Headers` in the response is exactly the
+*configured* `allowedHeaders` list - not a reflection of the preflight's
+own `Access-Control-Request-Headers`, even though the two happen to
+match here. **What actually demonstrates the strict default** is the
+frontend trying to send a header nobody configured, e.g. adding a custom
+`X-Client-Version` header without updating `allowedHeaders`:
+
+```
+Access-Control-Request-Headers: authorization, content-type, x-client-version
+```
+
+still gets back the same `Access-Control-Allow-Headers: Content-Type, Authorization`
+- `x-client-version` is silently absent, so the browser refuses to send
+that header on the real request. No server-side error, no rejected
+preflight - the browser enforces it, and the fix is adding
+`"X-Client-Version"` to `allowedHeaders`, not debugging a server response.
+
 ## 5. Tests
 
 Minimum coverage, pass and failure cases both:
@@ -307,6 +380,11 @@ Minimum coverage, pass and failure cases both:
 - [ ] A request matching no policy and no `fallback` is configured gets no CORS headers touched at all - not an error, not a default-deny response
 - [ ] A request matching no policy but a `fallback` is configured uses the `fallback` options
 - [ ] A misconfigured policy (`credentials: true` + `origin: "*"`) crashes at `createCorsMiddleware()` creation time the same way a single flat `CorsOptions` misconfiguration does - confirmed for a policy other than the first one in the list, not just the first
+- [ ] With no `maxAge` configured, `Access-Control-Max-Age` is never set at all - not a default value, absent entirely
+- [ ] A request with no `Origin` header at all reaches the wrapped handler untouched, with no CORS headers added and no preflight short-circuit, regardless of method
+- [ ] A preflight requesting a method outside `CorsOptions.methods` still gets `204`, with that method simply absent from `Access-Control-Allow-Methods` rather than the preflight being rejected
+- [ ] With no `allowedHeaders` configured, `Access-Control-Allow-Headers` is never set at all - not a reflection of `Access-Control-Request-Headers`, absent entirely
+- [ ] With `allowedHeaders` configured, `Access-Control-Allow-Headers` reflects exactly that list, regardless of what `Access-Control-Request-Headers` on the preflight actually asked for
 
 ## 6. Guardrails (over-engineering risk)
 
@@ -317,15 +395,14 @@ Minimum coverage, pass and failure cases both:
 
 ## 7. Open questions / parking lot
 
-- Default `allowedHeaders` behavior (§2.3) - reflecting back whatever the browser's preflight requested is the permissive default most CORS libraries ship with, but it is a default worth a deliberate yes/no rather than assuming, the same way Validation's dependency packaging was left open rather than silently decided.
-- **Preflight requesting a disallowed method** - if `Access-Control-Request-Method` isn't in the configured `methods` list, what should the middleware do? Still respond `204` and simply omit that method from `Access-Control-Allow-Methods` (letting the browser itself reject the follow-up request), or answer differently? Not decided.
-- **No `Origin` header at all** - same-origin requests and non-browser clients (curl, server-to-server calls) never send `Origin`. The design implies the middleware should do nothing and pass these through untouched, but this has never been stated outright, and §5's test list has no case for it.
-- **`maxAge` default when unset** - not stated what happens if `maxAge` isn't configured. Presumably `Access-Control-Max-Age` is simply omitted, letting the browser fall back to its own default preflight-cache duration, but this should be said explicitly rather than left to guesswork.
+None currently - every question this doc raised has been resolved, see §8.
 
 ## 8. Decisions log
 
 - **2026-08-29** — Spec created. Two headline decisions made up front rather than left open: (1) plain middleware via the existing `app.use()`, no new `Empire.ts` method, matching the precedent `validate()` set in Phase 11; (2) zero new dependency - CORS is pure header logic, doesn't need a library the way schema validation needed Zod. The preflight-vs-`Router`'s-existing-`OPTIONS`-handling interaction (§2.2) is the one genuinely hard part of this design and is fully specified, not left open.
-- **2026-08-29** — `exposedHeaders` added to `CorsOptions` (§2.3), resolving what had briefly been an open question in §7. Sets `Access-Control-Expose-Headers` on the actual response (not the preflight) - without it, cross-origin JS can only read the small browser-safelisted set of response headers, and any app exposing custom headers (pagination info, a request-id, rate-limit headers) would have no way to make them readable cross-origin. No default - unset means nothing extra is exposed. Deliberately more conservative than `allowedHeaders`/`methods`, which both default permissively (reflecting back what was asked, or a standard method list) - those two only affect what a browser is allowed to *send*, while `exposedHeaders` controls what internal header names get revealed to cross-origin JS at all, which is a more consequential default to get wrong.
+- **2026-08-29** — `exposedHeaders` added to `CorsOptions` (§2.3), resolving what had briefly been an open question in §7. Sets `Access-Control-Expose-Headers` on the actual response (not the preflight) - without it, cross-origin JS can only read the small browser-safelisted set of response headers, and any app exposing custom headers (pagination info, a request-id, rate-limit headers) would have no way to make them readable cross-origin. No default - unset means nothing extra is exposed. Deliberately more conservative than `methods`, which defaults permissively (a standard method list) since it only affects what a browser is allowed to *send*, while `exposedHeaders` controls what internal header names get revealed to cross-origin JS at all, which is a more consequential default to get wrong. *(At the time, `allowedHeaders` was also permissive-by-default and part of this same contrast - see the 2026-09-08 entry below, where that changed.)*
 - **2026-08-29** — `Vary: Origin` resolved and added as §2.5, closing the open question in §7. Set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; never set when it is. Reasoning: our design only echoes back `Access-Control-Allow-Origin` when the incoming request's `Origin` matches the configured allowlist, so for any non-wildcard `origin` config the response genuinely varies by request - without `Vary: Origin`, a cache in front of the app (browser cache, CDN, reverse proxy) could serve a response meant for one origin to a different one.
 - **2026-08-29** — The preflight-`Allow`-header question resolved (§2.2), closing the open question in §7: yes, include `Allow` on the preflight response, sourced from `CorsOptions.methods` - the same source as `Access-Control-Allow-Methods`. A `Router`-coupled alternative (a public `getAllowedMethodsForPath()`, `cors(router: Router)` taking a live `Router` reference for a path-exact `Allow` value) was considered and explicitly rejected: the underlying method-lookup logic already exists internally in `Router.findRoute()`, so it wasn't a matching-logic cost, but adopting it would have required a new public `Empire.router` getter and broken the "middleware needs only its own config, never a live framework object" precedent every other middleware (`createLoggerMiddleware`, `validate()`) has held to. It would also have removed the ability to deliberately expose a narrower `Access-Control-Allow-Methods` surface than what's actually implemented (a route that exists for same-origin use only, never meant to be cross-origin-callable) - keeping that an explicit, independent allowlist is a real capability worth keeping, not an oversight to fix. The resulting `Allow` header is therefore a global-config approximation, not path-exact the way `Router`'s own `Allow` is - stated explicitly in §2.2 rather than silently assumed.
 - **2026-08-29** — "Single global policy only" resolved as §2.6, closing the open question in §7 - but deliberately with the cheap option, not the complete fix. `CorsConfig` now accepts either a plain `CorsOptions` or `{ policies, fallback? }`, matched by path entirely inside `createCorsMiddleware()`'s own function body - no `Router`/`Empire.ts` involvement, consistent with every other decision in this doc. The actual underlying gap (Empire has no real route-scoped middleware at all - `examples/08-authentication` already hand-rolls the same path-checking this design now does for CORS specifically) is a separate, much larger effort, now tracked in `PLAN.md` Phase 3's "Route-level middleware" (remaining, unstarted) and named in `doc/ARCHITECTURE.md`'s Known Architectural Issues - not something this doc attempts to solve. If real route-scoped middleware is ever built, `policies`/`fallback` here becomes redundant and should collapse away in favor of it.
+- **2026-08-29** — Three remaining §7 items resolved together, closing all but the `allowedHeaders` default (left for a deliberate policy call, not derived here): (1) `maxAge` unset omits `Access-Control-Max-Age` entirely rather than defaulting to a value, letting the browser use its own default preflight-cache duration - stated in `CorsOptions`'s JSDoc (§2.3) rather than left implicit; (2) a request with no `Origin` header at all is a no-op - `next()` immediately, nothing to check against, folded into §2.2's existing "Otherwise" branch rather than treated as a separate case; (3) a preflight requesting a method outside `CorsOptions.methods` still gets `204`, with that method simply absent from `Access-Control-Allow-Methods` rather than the preflight itself being rejected - the standard, spec-conformant behavior, letting the browser make the actual enforcement decision.
+- **2026-09-08** — `allowedHeaders` default resolved, closing the last item in §7 - the user's own call, not derived from a technical fact the way every other resolution in this doc was. **Strict by default**, reversing the original permissive draft: an unconfigured `allowedHeaders` means `Access-Control-Allow-Headers` is never set at all, regardless of what the preflight's `Access-Control-Request-Headers` asked for - explicit configuration required to permit anything beyond CORS's own safelisted "simple" headers. `allowedHeaders` and `exposedHeaders` now share the same conservative philosophy (see the 2026-08-29 `exposedHeaders` entry above, written when they still differed). This closes every open question this doc has raised - §7 is empty as of this entry.
