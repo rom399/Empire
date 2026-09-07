@@ -98,6 +98,15 @@ export interface CorsOptions {
      * Pass an explicit array to restrict instead.
      */
     allowedHeaders?: string[];
+    /**
+     * Sets Access-Control-Expose-Headers on the actual response (not the
+     * preflight). Without this, cross-origin JS can only read a small
+     * safelisted set of response headers (Content-Type, Content-Length,
+     * a few others) - anything custom (pagination info, a request-id
+     * header, rate-limit headers) is invisible to it unless listed here.
+     * No default - unset means nothing extra is exposed.
+     */
+    exposedHeaders?: string[];
     /** Sets Access-Control-Allow-Credentials - see 2.4 for the wildcard interaction. */
     credentials?: boolean;
     /** Access-Control-Max-Age, in seconds - how long a browser may cache one preflight result. */
@@ -110,6 +119,12 @@ deliberately included, not just a string/array - it's the low-cost,
 high-value escape hatch for dynamic origin checks (subdomain patterns, a
 database-backed allowlist) without Empire having to build a pattern-matching
 DSL itself (see Guardrails).
+
+`allowedHeaders` and `exposedHeaders` control opposite directions and
+must not be confused: `allowedHeaders` is what the *browser* is permitted
+to *send* (answered on the preflight only); `exposedHeaders` is what
+*JavaScript* is permitted to *read* off the actual response (set on the
+real response, not the preflight).
 
 ### 2.4 The credentials + wildcard-origin conflict
 
@@ -131,15 +146,31 @@ response outright, silently, if a server sends both. Two consequences:
   server ever starts - rather than silently producing CORS responses
   that browsers will always reject.
 
+### 2.5 `Vary: Origin`
+
+Whenever the response's `Access-Control-Allow-Origin` value depends on
+which origin is asking - true for `origin` configured as a string,
+`string[]`, or function, since the middleware only echoes back an origin
+that actually matched the allowlist - a cache sitting in front of the app
+(browser cache, CDN, reverse proxy) needs to know the response varies by
+`Origin`, or it can serve a response meant for origin A to a request from
+origin B. The rule, applied uniformly on both preflight and actual
+responses:
+
+- **`origin: "*"`** - the response is unconditionally `Access-Control-Allow-Origin: *` for every request, never varies - no `Vary: Origin` needed.
+- **Anything else** (string, `string[]`, function) - the response depends on the incoming `Origin`, so set `Vary: Origin` whenever this middleware runs. Append to any existing `Vary` value rather than overwriting it, in case something else (a future compression middleware, for instance) already set one.
+
 ## 3. Build order / milestones
 
 - [ ] **C-1: `CorsOptions` + `createCorsMiddleware()` skeleton** - origin matching (string/array/function), sets `Access-Control-Allow-Origin` on non-preflight responses for an allowed origin
 - [ ] **C-2: Preflight detection & short-circuit** - `Origin` + `Access-Control-Request-Method` both present → `204` with `Access-Control-Allow-Methods`/`-Headers`/`-Max-Age`, no `next()` call
 - [ ] **C-3: Credentials + wildcard-origin guard** - throws at creation time for the invalid combination (2.4); per-request specific-origin echo when `credentials: true`
 - [ ] **C-4: `allowedHeaders` reflection default**
-- [ ] **C-5: Example** - `examples/11-cors/server.ts`, a real cross-origin request that only succeeds because of the middleware
-- [ ] **C-6: Tests** - see §5
-- [ ] **C-7: Docs** - README CORS section, `doc/ARCHITECTURE.md`, `PLAN.md` Phase 16 checkbox
+- [ ] **C-5: `exposedHeaders`** - sets `Access-Control-Expose-Headers` on the actual (non-preflight) response when configured
+- [ ] **C-6: `Vary: Origin`** - set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; omitted when it is (§2.5)
+- [ ] **C-7: Example** - `examples/11-cors/server.ts`, a real cross-origin request that only succeeds because of the middleware
+- [ ] **C-8: Tests** - see §5
+- [ ] **C-9: Docs** - README CORS section, `doc/ARCHITECTURE.md`, `PLAN.md` Phase 16 checkbox
 
 ## 4. Examples
 
@@ -188,6 +219,12 @@ Minimum coverage, pass and failure cases both:
 - [ ] `createCorsMiddleware({ credentials: true, origin: "*" })` throws synchronously at creation time, not per-request
 - [ ] `origin` as a function receives the request's actual `Origin` value, and its boolean return determines whether the allow header is set
 - [ ] `maxAge` sets `Access-Control-Max-Age` on preflight responses only, never on actual-request responses
+- [ ] `exposedHeaders` sets `Access-Control-Expose-Headers` on the actual response, not the preflight response
+- [ ] With no `exposedHeaders` configured, `Access-Control-Expose-Headers` is never set at all - not an empty header, absent entirely
+- [ ] `Vary: Origin` is set on an actual response when `origin` is a string, `string[]`, or function
+- [ ] `Vary: Origin` is set on a preflight response too, not just actual responses
+- [ ] `Vary: Origin` is **not** set when `origin` is configured as the literal `"*"`
+- [ ] `Vary: Origin` is appended to an existing `Vary` header value (e.g. one already set by another middleware) rather than overwriting it
 
 ## 6. Guardrails (over-engineering risk)
 
@@ -200,7 +237,13 @@ Minimum coverage, pass and failure cases both:
 
 - Should a preflight response the middleware answers directly also include an `Allow` header, for consistency with `Router`'s own convention? Not required by the CORS spec either way - low priority, worth a quick decision before C-2, not a blocker for the design.
 - Default `allowedHeaders` behavior (§2.3) - reflecting back whatever the browser's preflight requested is the permissive default most CORS libraries ship with, but it is a default worth a deliberate yes/no rather than assuming, the same way Validation's dependency packaging was left open rather than silently decided.
+- **Preflight requesting a disallowed method** - if `Access-Control-Request-Method` isn't in the configured `methods` list, what should the middleware do? Still respond `204` and simply omit that method from `Access-Control-Allow-Methods` (letting the browser itself reject the follow-up request), or answer differently? Not decided.
+- **No `Origin` header at all** - same-origin requests and non-browser clients (curl, server-to-server calls) never send `Origin`. The design implies the middleware should do nothing and pass these through untouched, but this has never been stated outright, and §5's test list has no case for it.
+- **Single global policy only.** This design supports exactly one CORS policy via one `app.use(createCorsMiddleware(...))` call. A real app sometimes wants different rules per route group (e.g. a public API vs. an admin API). That isn't possible without route-scoped middleware, which Empire doesn't have yet - worth naming as a known limitation of this design rather than assuming one global policy is always sufficient. Not something this doc resolves.
+- **`maxAge` default when unset** - not stated what happens if `maxAge` isn't configured. Presumably `Access-Control-Max-Age` is simply omitted, letting the browser fall back to its own default preflight-cache duration, but this should be said explicitly rather than left to guesswork.
 
 ## 8. Decisions log
 
 - **2026-08-29** — Spec created. Two headline decisions made up front rather than left open: (1) plain middleware via the existing `app.use()`, no new `Empire.ts` method, matching the precedent `validate()` set in Phase 11; (2) zero new dependency - CORS is pure header logic, doesn't need a library the way schema validation needed Zod. The preflight-vs-`Router`'s-existing-`OPTIONS`-handling interaction (§2.2) is the one genuinely hard part of this design and is fully specified, not left open.
+- **2026-08-29** — `exposedHeaders` added to `CorsOptions` (§2.3), resolving what had briefly been an open question in §7. Sets `Access-Control-Expose-Headers` on the actual response (not the preflight) - without it, cross-origin JS can only read the small browser-safelisted set of response headers, and any app exposing custom headers (pagination info, a request-id, rate-limit headers) would have no way to make them readable cross-origin. No default - unset means nothing extra is exposed. Deliberately more conservative than `allowedHeaders`/`methods`, which both default permissively (reflecting back what was asked, or a standard method list) - those two only affect what a browser is allowed to *send*, while `exposedHeaders` controls what internal header names get revealed to cross-origin JS at all, which is a more consequential default to get wrong.
+- **2026-08-29** — `Vary: Origin` resolved and added as §2.5, closing the open question in §7. Set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; never set when it is. Reasoning: our design only echoes back `Access-Control-Allow-Origin` when the incoming request's `Origin` matches the configured allowlist, so for any non-wildcard `origin` config the response genuinely varies by request - without `Vary: Origin`, a cache in front of the app (browser cache, CDN, reverse proxy) could serve a response meant for one origin to a different one.
