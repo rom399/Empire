@@ -1,16 +1,18 @@
 /**
  * Smoke-tests every examples/NN-name/server.ts: starts it, waits for it
  * to accept connections, confirms it completes a real HTTP round trip,
- * then shuts it down via SIGINT - the exact signal every example
- * registers a handler for (app.stop() then process.exit(0)) - and
- * confirms that handler actually exits cleanly, rather than assuming it
- * does. Fails fast: stops at the first example that doesn't pass instead
- * of running all ten and aggregating.
+ * then shuts it down - on POSIX via a real SIGINT, the exact signal every
+ * example registers a handler for (app.stop() then process.exit(0)),
+ * confirming that handler actually exits cleanly rather than assuming it
+ * does; on Windows via killTree()'s tree-kill instead, since a signal
+ * can't reach the real process there anyway (see that function's
+ * comment). Fails fast: stops at the first example that doesn't pass
+ * instead of running all ten and aggregating.
  *
  * Node builtins only, run via tsx - no new dependencies.
  */
 
-import { spawn, ChildProcess } from "child_process";
+import { spawn, ChildProcess, execFileSync } from "child_process";
 import { connect } from "net";
 import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
@@ -101,7 +103,7 @@ function waitForPort(port: number, timeoutMs: number): Promise<void> {
 function waitForExit(child: ChildProcess, timeoutMs: number): Promise<number | null> {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
-            child.kill("SIGKILL");
+            killTree(child);
             reject(new Error(`Process did not exit within ${timeoutMs}ms of SIGINT - force-killed`));
         }, timeoutMs);
 
@@ -110,6 +112,34 @@ function waitForExit(child: ChildProcess, timeoutMs: number): Promise<number | n
             resolve(code);
         });
     });
+}
+
+/**
+ * Force-terminates a spawned example, including everything running
+ * underneath it. On Windows, tsx.cmd needs shell: true (see runExample()),
+ * so the process spawn() hands back is actually cmd.exe - the real
+ * tsx/node server process runs as its grandchild. Windows has no
+ * POSIX-style process groups, so child.kill() only ever reaches that
+ * cmd.exe wrapper: killing it exits the ChildProcess object this script
+ * is watching (satisfying waitForExit() below), while the real server
+ * process is silently orphaned - still bound to its port, still holding
+ * the stdio pipe this script inherits open, indefinitely. taskkill's /t
+ * (tree) flag kills the whole subtree instead of just the wrapper.
+ * POSIX doesn't need any of this - the process spawn() returns there IS
+ * the real one, so a plain signal reaches it directly.
+ */
+function killTree(child: ChildProcess): void {
+    if (process.platform === "win32" && child.pid !== undefined) {
+        try {
+            execFileSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
+        } catch {
+            // Already gone between whatever check triggered this call and
+            // taskkill actually running - not a failure worth surfacing.
+        }
+        return;
+    }
+
+    child.kill("SIGKILL");
 }
 
 async function runExample(example: Example): Promise<void> {
@@ -150,13 +180,22 @@ async function runExample(example: Example): Promise<void> {
         // routes, just that the server is genuinely alive and speaking HTTP.
         console.log(`  responded: HTTP ${response.status}`);
 
-        child.kill("SIGINT");
+        if (process.platform === "win32") {
+            // A real SIGINT can't reach the actual tsx/node process this
+            // way on Windows regardless (see killTree()'s comment) - go
+            // straight to a full tree-kill rather than sending a signal
+            // that would only exit the cmd.exe wrapper and orphan the
+            // server underneath it.
+            killTree(child);
+        } else {
+            child.kill("SIGINT");
+        }
+
         const exitCode = await waitForExit(child, SHUTDOWN_TIMEOUT_MS);
 
-        // Windows can't deliver a real SIGINT the way POSIX can - kill()
-        // there just force-terminates the process (a null exit code, not
-        // the graceful process.exit(0) the example's own handler would
-        // produce), so the strict "exited 0" check only means anything on
+        // On Windows the process above was force-killed, not given a
+        // chance at graceful shutdown, so a null exit code there is
+        // expected - the strict "exited 0" check only means anything on
         // the POSIX platform CI actually runs on. Still confirms the
         // process actually stopped either way - waitForExit already
         // rejects on a genuine hang, regardless of platform.
@@ -167,7 +206,7 @@ async function runExample(example: Example): Promise<void> {
         console.log("  shut down cleanly");
     } catch (err) {
         if (!childExited) {
-            child.kill("SIGKILL");
+            killTree(child);
         }
         throw err;
     }
