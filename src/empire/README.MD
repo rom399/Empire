@@ -20,6 +20,8 @@ The goal of the project is to understand how modern web frameworks such as Expre
   per-request scoping via `ctx.services`, disposal
 * Schema-based request validation (body, query, route params) via `validate()`,
   the one deliberate exception to Empire's zero-runtime-dependency rule
+* CORS support via `createCorsMiddleware()` - origin/method/header
+  allowlisting, preflight handling, credentials, and per-path policies
 * Centralized error handling built around `HttpError`
 * Configurable request body size limit
 * Pluggable logging abstraction (`ILogger`), with a built-in console logger
@@ -426,6 +428,56 @@ app.get("/search", validate({ query: searchSchema })(async (ctx, { query }) => {
 See `examples/10-validation` for a runnable version covering body, query
 (with coercion), and route param validation together.
 
+## CORS
+
+`createCorsMiddleware()` wraps requests with cross-origin header logic -
+registered via the same `app.use()`, needing no changes to `Router` or
+`Context` (see [`doc/features/CORS.md`](doc/features/CORS.md) for the
+full design):
+
+```ts
+import { createCorsMiddleware } from "./src/middleware/CorsMiddleware";
+
+app.use(createCorsMiddleware({
+    origin: ["http://localhost:5173"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    maxAge: 600,
+}));
+```
+
+A genuine preflight - an `OPTIONS` request carrying both `Origin` and
+`Access-Control-Request-Method` - is answered directly by the middleware
+(`204` plus the appropriate `Access-Control-Allow-*` headers) and never
+reaches `Router`; every other request, including a same-origin `OPTIONS`
+probe, falls through to `Router`'s existing method-discovery behavior
+untouched.
+
+`allowedHeaders` and `exposedHeaders` are strict by default - unset means
+nothing beyond the browser's own CORS-safelisted headers is permitted or
+exposed, not a permissive reflect-back of whatever was requested.
+`credentials: true` always echoes the specific requesting `Origin` rather
+than `*`, and combining it with the literal `origin: "*"` throws
+synchronously at creation time, since browsers reject that combination
+outright.
+
+A single call can also apply different policies by path, without Empire
+gaining real route-scoped middleware:
+
+```ts
+app.use(createCorsMiddleware({
+    policies: [
+        { match: (path) => path.startsWith("/admin"), options: { origin: ["https://admin.example.com"] } },
+        { match: (path) => path.startsWith("/api"), options: { origin: "*" } },
+    ],
+    // A path matching neither policy gets no CORS headers at all.
+}));
+```
+
+See `examples/11-cors` for a runnable version covering an allowed and a
+disallowed origin, a preflight with custom headers, credentials, and the
+multi-policy form together.
+
 ## Authentication
 
 Empire does not ship authentication middleware. The framework owns the
@@ -607,6 +659,7 @@ npx tsx examples/02-routing/server.ts
 | `08-authentication` | 8008 | A worked example of writing your own auth middleware: Bearer token parsing, `WWW-Authenticate` on rejection, and handing an identity to route handlers via `ctx.state` |
 | `09-dependency-injection` | 8009 | The DI container wired into a real app: a singleton in-memory repository backing three `/records` routes, and a scoped service that calls an "upstream" API over a real HTTP request via `ctx.services` |
 | `10-validation` | 8010 | `validate()` covering body, query (with `z.coerce` for the all-strings-off-the-URL gotcha), and route param validation, each with a passing and a failing request |
+| `11-cors` | 8011 | `createCorsMiddleware()` covering an allowed vs. disallowed origin, a preflight with custom headers and credentials, and a stricter multi-policy for `/admin` |
 
 ## Testing
 
@@ -639,6 +692,7 @@ aborted download - is exactly what a mock gets wrong.
 | `sendErrorResponse` | `tests/unit/errors/sendErrorResponse.test.ts` |
 | `ConsoleLogger` | `tests/unit/logging/ConsoleLogger.test.ts` |
 | `LoggerMiddleware` | `tests/unit/middleware/BuiltInMiddleware.test.ts` |
+| `createCorsMiddleware` | `tests/unit/middleware/CorsMiddleware.test.ts` |
 | `ServiceCollection`, `ServiceProvider`, `ServiceScope`, `createToken` | `tests/unit/di/ServiceCollection.test.ts`, `tests/unit/di/ServiceProvider.test.ts`, `tests/unit/di/ServiceScope.test.ts`, `tests/unit/di/ServiceToken.test.ts` |
 | `validate` | `tests/unit/validation/validate.test.ts` |
 
@@ -700,7 +754,8 @@ empire/
 │   ├── types.ts
 │   ├── http/          Context, CookieOptions
 │   ├── routing/        Route, RouteMatch, RouteMatcher, Router
-│   ├── middleware/      LoggerMiddleware
+│   ├── middleware/      LoggerMiddleware, CorsMiddleware, CorsOptions,
+│   │                     CorsPolicy, CorsConfig
 │   ├── static/          MimeTypes, StaticFileHandler and its option types
 │   ├── errors/          HttpError, BadRequestError, HttpErrorOptions,
 │   │                     ValidationError, ValidationIssue, sendErrorResponse
@@ -719,7 +774,8 @@ empire/
 │   ├── 07-body-size-limit/
 │   ├── 08-authentication/
 │   ├── 09-dependency-injection/
-│   └── 10-validation/
+│   ├── 10-validation/
+│   └── 11-cors/
 ├── tests/
 │   ├── unit/
 │   ├── integration/

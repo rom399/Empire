@@ -1,6 +1,6 @@
 # Empire — CORS: Design & Build Doc
 
-**Status:** Draft
+**Status:** Implemented
 **Scope:** Empire (native TypeScript webserver). Part of Phase 16 in `PLAN.md`.
 
 ## 1. Context & Goals
@@ -258,17 +258,17 @@ app.use(createCorsMiddleware({
 
 ## 3. Build order / milestones
 
-- [ ] **C-1: `CorsOptions` + `createCorsMiddleware()` skeleton** - origin matching (string/array/function), sets `Access-Control-Allow-Origin` on non-preflight responses for an allowed origin
-- [ ] **C-2: Preflight detection & short-circuit** - `Origin` + `Access-Control-Request-Method` both present → `204` with `Access-Control-Allow-Methods`/`-Headers`/`-Max-Age`, no `next()` call. No `Origin` header at all → `next()` immediately, no-op (§2.2). A requested method outside `CorsOptions.methods` → still `204`, just omitted from `Access-Control-Allow-Methods` rather than rejected (§2.2)
-- [ ] **C-3: `Allow` on the preflight response** - sourced from `CorsOptions.methods`, same list as `Access-Control-Allow-Methods` (§2.2); not `Router`-derived, see §2.2 for why
-- [ ] **C-4: Credentials + wildcard-origin guard** - throws at creation time for the invalid combination (2.4); per-request specific-origin echo when `credentials: true`
-- [ ] **C-5: `allowedHeaders`** - sets `Access-Control-Allow-Headers` on the preflight response from the configured list only; strict by default, no reflection of `Access-Control-Request-Headers`
-- [ ] **C-6: `exposedHeaders`** - sets `Access-Control-Expose-Headers` on the actual (non-preflight) response when configured
-- [ ] **C-7: `Vary: Origin`** - set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; omitted when it is (§2.5)
-- [ ] **C-8: Multi-policy support** - `CorsConfig` accepting either a plain `CorsOptions` or `{ policies, fallback? }`, first-match-wins path matching, per-policy credentials+wildcard validation at creation time (§2.6)
-- [ ] **C-9: Example** - `examples/11-cors/server.ts`, a real cross-origin request that only succeeds because of the middleware
-- [ ] **C-10: Tests** - see §5
-- [ ] **C-11: Docs** - README CORS section, `doc/ARCHITECTURE.md`, `PLAN.md` Phase 16 checkbox
+- [x] **C-1: `CorsOptions` + `createCorsMiddleware()` skeleton** - origin matching (string/array/function), sets `Access-Control-Allow-Origin` on non-preflight responses for an allowed origin
+- [x] **C-2: Preflight detection & short-circuit** - `Origin` + `Access-Control-Request-Method` both present → `204` with `Access-Control-Allow-Methods`/`-Headers`/`-Max-Age`, no `next()` call. No `Origin` header at all → `next()` immediately, no-op (§2.2). A requested method outside `CorsOptions.methods` → still `204`, just omitted from `Access-Control-Allow-Methods` rather than rejected (§2.2)
+- [x] **C-3: `Allow` on the preflight response** - sourced from `CorsOptions.methods`, same list as `Access-Control-Allow-Methods` (§2.2); not `Router`-derived, see §2.2 for why
+- [x] **C-4: Credentials + wildcard-origin guard** - throws at creation time for the invalid combination (2.4); per-request specific-origin echo when `credentials: true`
+- [x] **C-5: `allowedHeaders`** - sets `Access-Control-Allow-Headers` on the preflight response from the configured list only; strict by default, no reflection of `Access-Control-Request-Headers`
+- [x] **C-6: `exposedHeaders`** - sets `Access-Control-Expose-Headers` on the actual (non-preflight) response when configured
+- [x] **C-7: `Vary: Origin`** - set (appended, not overwritten) on both preflight and actual responses whenever `origin` isn't the literal `"*"`; omitted when it is (§2.5)
+- [x] **C-8: Multi-policy support** - `CorsConfig` accepting either a plain `CorsOptions` or `{ policies, fallback? }`, first-match-wins path matching, per-policy credentials+wildcard validation at creation time (§2.6)
+- [x] **C-9: Example** - `examples/11-cors/server.ts`, a real cross-origin request that only succeeds because of the middleware
+- [x] **C-10: Tests** - see §5
+- [x] **C-11: Docs** - README CORS section, `doc/ARCHITECTURE.md`, `PLAN.md` Phase 16 checkbox
 
 ## 4. Examples
 
@@ -360,31 +360,31 @@ preflight - the browser enforces it, and the fix is adding
 
 Minimum coverage, pass and failure cases both:
 
-- [ ] An actual (non-preflight) request from an allowed origin gets `Access-Control-Allow-Origin` set to that origin
-- [ ] An actual request from a disallowed origin does **not** get the header set - the server doesn't need to reject the request itself, the browser blocks reading the response client-side once the header is absent
-- [ ] A genuine preflight (`Origin` + `Access-Control-Request-Method` both present) is intercepted and answered directly by the middleware, and never reaches `Router`
-- [ ] A non-preflight `OPTIONS` request (no `Access-Control-Request-Method`) still gets `Router`'s existing automatic `OPTIONS`/`Allow` behavior, completely unaffected by this middleware being registered
-- [ ] `credentials: true` always echoes the specific request's `Origin`, never `*`, even when `origin` is configured as `"*"` or an array containing multiple entries
-- [ ] `createCorsMiddleware({ credentials: true, origin: "*" })` throws synchronously at creation time, not per-request
-- [ ] `origin` as a function receives the request's actual `Origin` value, and its boolean return determines whether the allow header is set
-- [ ] `maxAge` sets `Access-Control-Max-Age` on preflight responses only, never on actual-request responses
-- [ ] `exposedHeaders` sets `Access-Control-Expose-Headers` on the actual response, not the preflight response
-- [ ] With no `exposedHeaders` configured, `Access-Control-Expose-Headers` is never set at all - not an empty header, absent entirely
-- [ ] `Vary: Origin` is set on an actual response when `origin` is a string, `string[]`, or function
-- [ ] `Vary: Origin` is set on a preflight response too, not just actual responses
-- [ ] `Vary: Origin` is **not** set when `origin` is configured as the literal `"*"`
-- [ ] `Vary: Origin` is appended to an existing `Vary` header value (e.g. one already set by another middleware) rather than overwriting it
-- [ ] A preflight response includes a plain `Allow` header, with the same method list as `Access-Control-Allow-Methods`
-- [ ] `Allow` and `Access-Control-Allow-Methods` both reflect `CorsOptions.methods` - not the actual routes registered for the requested path, confirming the deliberate non-`Router`-derived behavior from §2.2
-- [ ] With `policies` configured, a request matching the first policy's `match()` uses that policy's `CorsOptions`, not a later policy's, even if the later one would also match
-- [ ] A request matching no policy and no `fallback` is configured gets no CORS headers touched at all - not an error, not a default-deny response
-- [ ] A request matching no policy but a `fallback` is configured uses the `fallback` options
-- [ ] A misconfigured policy (`credentials: true` + `origin: "*"`) crashes at `createCorsMiddleware()` creation time the same way a single flat `CorsOptions` misconfiguration does - confirmed for a policy other than the first one in the list, not just the first
-- [ ] With no `maxAge` configured, `Access-Control-Max-Age` is never set at all - not a default value, absent entirely
-- [ ] A request with no `Origin` header at all reaches the wrapped handler untouched, with no CORS headers added and no preflight short-circuit, regardless of method
-- [ ] A preflight requesting a method outside `CorsOptions.methods` still gets `204`, with that method simply absent from `Access-Control-Allow-Methods` rather than the preflight being rejected
-- [ ] With no `allowedHeaders` configured, `Access-Control-Allow-Headers` is never set at all - not a reflection of `Access-Control-Request-Headers`, absent entirely
-- [ ] With `allowedHeaders` configured, `Access-Control-Allow-Headers` reflects exactly that list, regardless of what `Access-Control-Request-Headers` on the preflight actually asked for
+- [x] An actual (non-preflight) request from an allowed origin gets `Access-Control-Allow-Origin` set to that origin
+- [x] An actual request from a disallowed origin does **not** get the header set - the server doesn't need to reject the request itself, the browser blocks reading the response client-side once the header is absent
+- [x] A genuine preflight (`Origin` + `Access-Control-Request-Method` both present) is intercepted and answered directly by the middleware, and never reaches `Router`
+- [x] A non-preflight `OPTIONS` request (no `Access-Control-Request-Method`) still gets `Router`'s existing automatic `OPTIONS`/`Allow` behavior, completely unaffected by this middleware being registered
+- [x] `credentials: true` always echoes the specific request's `Origin`, never `*`, even when `origin` is configured as `"*"` or an array containing multiple entries
+- [x] `createCorsMiddleware({ credentials: true, origin: "*" })` throws synchronously at creation time, not per-request
+- [x] `origin` as a function receives the request's actual `Origin` value, and its boolean return determines whether the allow header is set
+- [x] `maxAge` sets `Access-Control-Max-Age` on preflight responses only, never on actual-request responses
+- [x] `exposedHeaders` sets `Access-Control-Expose-Headers` on the actual response, not the preflight response
+- [x] With no `exposedHeaders` configured, `Access-Control-Expose-Headers` is never set at all - not an empty header, absent entirely
+- [x] `Vary: Origin` is set on an actual response when `origin` is a string, `string[]`, or function
+- [x] `Vary: Origin` is set on a preflight response too, not just actual responses
+- [x] `Vary: Origin` is **not** set when `origin` is configured as the literal `"*"`
+- [x] `Vary: Origin` is appended to an existing `Vary` header value (e.g. one already set by another middleware) rather than overwriting it
+- [x] A preflight response includes a plain `Allow` header, with the same method list as `Access-Control-Allow-Methods`
+- [x] `Allow` and `Access-Control-Allow-Methods` both reflect `CorsOptions.methods` - not the actual routes registered for the requested path, confirming the deliberate non-`Router`-derived behavior from §2.2
+- [x] With `policies` configured, a request matching the first policy's `match()` uses that policy's `CorsOptions`, not a later policy's, even if the later one would also match
+- [x] A request matching no policy and no `fallback` is configured gets no CORS headers touched at all - not an error, not a default-deny response
+- [x] A request matching no policy but a `fallback` is configured uses the `fallback` options
+- [x] A misconfigured policy (`credentials: true` + `origin: "*"`) crashes at `createCorsMiddleware()` creation time the same way a single flat `CorsOptions` misconfiguration does - confirmed for a policy other than the first one in the list, not just the first
+- [x] With no `maxAge` configured, `Access-Control-Max-Age` is never set at all - not a default value, absent entirely
+- [x] A request with no `Origin` header at all reaches the wrapped handler untouched, with no CORS headers added and no preflight short-circuit, regardless of method
+- [x] A preflight requesting a method outside `CorsOptions.methods` still gets `204`, with that method simply absent from `Access-Control-Allow-Methods` rather than the preflight being rejected
+- [x] With no `allowedHeaders` configured, `Access-Control-Allow-Headers` is never set at all - not a reflection of `Access-Control-Request-Headers`, absent entirely
+- [x] With `allowedHeaders` configured, `Access-Control-Allow-Headers` reflects exactly that list, regardless of what `Access-Control-Request-Headers` on the preflight actually asked for
 
 ## 6. Guardrails (over-engineering risk)
 
@@ -406,3 +406,6 @@ None currently - every question this doc raised has been resolved, see §8.
 - **2026-08-29** — "Single global policy only" resolved as §2.6, closing the open question in §7 - but deliberately with the cheap option, not the complete fix. `CorsConfig` now accepts either a plain `CorsOptions` or `{ policies, fallback? }`, matched by path entirely inside `createCorsMiddleware()`'s own function body - no `Router`/`Empire.ts` involvement, consistent with every other decision in this doc. The actual underlying gap (Empire has no real route-scoped middleware at all - `examples/08-authentication` already hand-rolls the same path-checking this design now does for CORS specifically) is a separate, much larger effort, now tracked in `PLAN.md` Phase 3's "Route-level middleware" (remaining, unstarted) and named in `doc/ARCHITECTURE.md`'s Known Architectural Issues - not something this doc attempts to solve. If real route-scoped middleware is ever built, `policies`/`fallback` here becomes redundant and should collapse away in favor of it.
 - **2026-08-29** — Three remaining §7 items resolved together, closing all but the `allowedHeaders` default (left for a deliberate policy call, not derived here): (1) `maxAge` unset omits `Access-Control-Max-Age` entirely rather than defaulting to a value, letting the browser use its own default preflight-cache duration - stated in `CorsOptions`'s JSDoc (§2.3) rather than left implicit; (2) a request with no `Origin` header at all is a no-op - `next()` immediately, nothing to check against, folded into §2.2's existing "Otherwise" branch rather than treated as a separate case; (3) a preflight requesting a method outside `CorsOptions.methods` still gets `204`, with that method simply absent from `Access-Control-Allow-Methods` rather than the preflight itself being rejected - the standard, spec-conformant behavior, letting the browser make the actual enforcement decision.
 - **2026-09-08** — `allowedHeaders` default resolved, closing the last item in §7 - the user's own call, not derived from a technical fact the way every other resolution in this doc was. **Strict by default**, reversing the original permissive draft: an unconfigured `allowedHeaders` means `Access-Control-Allow-Headers` is never set at all, regardless of what the preflight's `Access-Control-Request-Headers` asked for - explicit configuration required to permit anything beyond CORS's own safelisted "simple" headers. `allowedHeaders` and `exposedHeaders` now share the same conservative philosophy (see the 2026-08-29 `exposedHeaders` entry above, written when they still differed). This closes every open question this doc has raised - §7 is empty as of this entry.
+- **2026-09-12** — Full implementation landed: C-1 through C-11 all complete. `src/middleware/CorsOptions.ts`, `CorsPolicy.ts`, `CorsConfig.ts`, `CorsMiddleware.ts` (`createCorsMiddleware()`); `examples/11-cors/server.ts`; `tests/unit/middleware/CorsMiddleware.test.ts` (36 cases, covering all of §5); README, `doc/ARCHITECTURE.md`, and `PLAN.md` Phase 16 updated. Status moves from Draft to Implemented. Two implementation notes worth recording:
+  - **Disallowed-origin preflight still short-circuits.** §2.2 splits "genuine preflight" from "everything else" purely by header presence (`Origin` + `Access-Control-Request-Method`), before any origin-allowlist check - read literally, a preflight from an origin *not* on the allowlist is still answered directly by this middleware (`204`, `Router` never sees it), just with every `Access-Control-Allow-*` header omitted rather than populated. This wasn't spelled out as its own case in §2.2 or tested for explicitly in §5, but follows from the ordering the doc already specifies, avoids leaking the configured methods/headers list to a disallowed origin, and still leaves the browser blocking the follow-up real request either way.
+  - **§5's `credentials` test bullet conflicts with §2.4's guard** - one bullet says `credentials: true` should echo the specific `Origin` "even when `origin` is configured as `\"*\"`", the very next bullet says that exact combination throws at creation time. The guard (§2.4) is what's actually implemented and tested; the credentials-echo test instead uses an array-form `origin` to demonstrate the same echo behavior without the wildcard conflict. §5 itself is left as originally written rather than silently edited, since it predates this build and the discrepancy is now recorded here.

@@ -1410,19 +1410,23 @@ Phase 10 build, not as a separate "advanced" phase:
 
 ## Phase 16 — HTTP Features
 
-CORS design lives in `doc/features/CORS.md` (draft, not yet started) -
-a plain middleware via the existing `app.use()`, no new `Empire.ts`
-method, zero new dependency. The rest of this phase's tasks have no
-design doc yet.
+CORS is implemented - a plain middleware via the existing `app.use()`,
+no new `Empire.ts` method, zero new dependency. Full design in
+`doc/features/CORS.md`. The rest of this phase's tasks have no design
+doc yet and remain unstarted.
 
 ### Tasks
 
 * Compression
-* CORS middleware
+* ✅ CORS middleware — `createCorsMiddleware()`,
+  `src/middleware/CorsMiddleware.ts`, `CorsOptions.ts`, `CorsPolicy.ts`,
+  `CorsConfig.ts`; full design and decisions log in `doc/features/CORS.md`
 * Response caching
 * Request size limits
 * Multipart uploads
 * File uploads
+
+Example: `examples/11-cors/server.ts`. Tests: `tests/unit/middleware/CorsMiddleware.test.ts`.
 
 ---
 

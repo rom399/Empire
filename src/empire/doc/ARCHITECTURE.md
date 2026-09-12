@@ -9,7 +9,7 @@ exception, depending on Zod - see `doc/features/VALIDATION.md` §2.1 for why.
 The design is inspired by ASP.NET Core — middleware pipelines, dependency
 injection, strongly-typed context, and a clean separation of concerns.
 
-Current version: **0.16.0 — Validation (V-1 through V-6 complete)**. See
+Current version: **0.17.0 — CORS (C-1 through C-11 complete)**. See
 `doc/PROJECT_STATE.md` for the up-to-date status and `PLAN.md` for the full
 phase-by-phase roadmap. No v1.0.0 blockers remain.
 
@@ -46,7 +46,12 @@ empire/
 │   │   ├── ILogger.ts              # Logger interface
 │   │   └── ConsoleLogger.ts        # Default console implementation
 │   ├── middleware/
-│   │   └── LoggerMiddleware.ts     # createLoggerMiddleware(logger) factory
+│   │   ├── LoggerMiddleware.ts     # createLoggerMiddleware(logger) factory
+│   │   ├── CorsOptions.ts          # CORS config interface (Phase 16) — see
+│   │   │                           # doc/features/CORS.md for the full design
+│   │   ├── CorsPolicy.ts           # One { match, options } entry in a multi-policy CorsConfig
+│   │   ├── CorsConfig.ts           # CorsOptions | { policies, fallback? }
+│   │   └── CorsMiddleware.ts       # createCorsMiddleware() — origin/preflight/credentials/Vary
 │   ├── errors/
 │   │   ├── HttpError.ts            # Base HTTP error class
 │   │   ├── HttpErrorOptions.ts     # { code?, retryable? } accepted by HttpError's constructor
@@ -92,7 +97,7 @@ empire/
 │   │   │                           # sendErrorResponse
 │   │   ├── static/                 # StaticFileHandler (FINDING 2, 9)
 │   │   ├── logging/
-│   │   ├── middleware/             # BuiltInMiddleware (FINDING 5)
+│   │   ├── middleware/             # BuiltInMiddleware (FINDING 5), CorsMiddleware (Phase 16)
 │   │   ├── di/                     # ServiceCollection, ServiceProvider, ServiceScope, ServiceToken
 │   │   └── validation/             # validate() - body/query/params, pass and failure cases
 │   ├── integration/                # Real-server tests: ContextSharing, MiddlewarePipeline,
@@ -562,6 +567,7 @@ itself use this signature.
 | File | Export | Behaviour |
 |------|--------|-----------|
 | `src/middleware/LoggerMiddleware.ts` | `createLoggerMiddleware(logger)` | Returns a middleware that logs `METHOD /path` through the given `ILogger` |
+| `src/middleware/CorsMiddleware.ts` | `createCorsMiddleware(config)` | Returns a middleware handling CORS: origin allowlisting, preflight short-circuit, credentials, `allowedHeaders`/`exposedHeaders`, `Vary: Origin`, and optional per-path policies — full design in `doc/features/CORS.md` |
 
 ---
 
