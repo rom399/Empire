@@ -4,7 +4,17 @@
   "version": "0.0.0",
   "description": "Standalone demo of consuming the published empire-ts package - not part of Empire's own examples/ suite, which imports the framework's source directly.",
   "scripts": {
-    "basic-server": "tsx basic-server.ts",
+    "01-basic-server": "tsx examples/01-basic-server/server.ts",
+    "02-routing": "tsx examples/02-routing/server.ts",
+    "03-middleware": "tsx examples/03-middleware/server.ts",
+    "04-static-files": "tsx examples/04-static-files/server.ts",
+    "05-error-handling": "tsx examples/05-error-handling/server.ts",
+    "06-react-app": "tsx examples/06-react-app/server.ts",
+    "07-body-size-limit": "tsx examples/07-body-size-limit/server.ts",
+    "08-authentication": "tsx examples/08-authentication/server.ts",
+    "09-dependency-injection": "tsx examples/09-dependency-injection/server.ts",
+    "10-validation": "tsx examples/10-validation/server.ts",
+    "11-cors": "tsx examples/11-cors/server.ts",
     "full-featured": "tsx full-featured.ts"
   },
   "dependencies": {

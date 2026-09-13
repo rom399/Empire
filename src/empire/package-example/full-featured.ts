@@ -11,15 +11,15 @@
  * - HttpError for a clean 404
  *
  * Run: npx tsx full-featured.ts   (from this directory, after npm install)
- * Open: http://localhost:9002
+ * Open: http://localhost:9012
  *
  * Try it:
- *   curl http://localhost:9002/users
- *   curl -X POST http://localhost:9002/users \
+ *   curl http://localhost:9012/users
+ *   curl -X POST http://localhost:9012/users \
  *     -H "Content-Type: application/json" \
  *     -d '{"name":"Ada","email":"ada@example.com"}'
- *   curl http://localhost:9002/users/1
- *   curl http://localhost:9002/users/999          # 404
+ *   curl http://localhost:9012/users/1
+ *   curl http://localhost:9012/users/999          # 404
  */
 
 import process from "process";
@@ -71,7 +71,7 @@ const logger = new ConsoleLogger();
 
 const app = new Empire({
     host: "localhost",
-    port: 9002,
+    port: 9012,
     logger,
     services: services.build(),
 });

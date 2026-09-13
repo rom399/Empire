@@ -39,25 +39,34 @@ there's nothing local-install-specific about the example code itself.
 
 ## Examples
 
-### `basic-server.ts`
-
-The smallest possible server: an HTML route, a health check, and an
-echo endpoint.
+`examples/` mirrors Empire's own eleven numbered examples 1:1 - same
+behavior, same routes, only the import changed from the framework's
+source tree to `"empire-ts"`, and each port shifted by 1000 so both
+sets can run side by side without colliding.
 
 ```bash
-npx tsx basic-server.ts
+npx tsx examples/02-routing/server.ts
 ```
 
-```
-http://localhost:9001/
-http://localhost:9001/health
-curl -X POST http://localhost:9001/echo -H "Content-Type: application/json" -d '{"hi":"there"}'
-```
+| Example | Port | Shows |
+|---|---|---|
+| `01-basic-server` | 9001 | A minimal server: an HTML route, a JSON health check, and a POST route that echoes its JSON body back |
+| `02-routing` | 9002 | A full REST-style user API: route params, query strings, a multi-param nested route, and a literal route registered ahead of an overlapping param route |
+| `03-middleware` | 9003 | The built-in `createLoggerMiddleware(logger)`, a short-circuiting auth-header check, and a custom timing middleware |
+| `04-static-files` | 9004 | An unprefixed static folder and a second one mounted under a URL prefix, served side by side |
+| `05-error-handling` | 9005 | `HttpError` and `BadRequestError` thrown from route handlers, and an uncaught error on `/crash` becoming a `500` |
+| `06-react-app` | 9006 | A real React + React Router app served with `spaFallback: true`, alongside a real API route that takes priority over the fallback |
+| `07-body-size-limit` | 9007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
+| `08-authentication` | 9008 | A worked example of writing your own auth middleware: Bearer token parsing, `WWW-Authenticate` on rejection, and handing an identity to route handlers via `ctx.state` |
+| `09-dependency-injection` | 9009 | The DI container wired into a real app: a singleton in-memory repository backing three `/records` routes, and a scoped service that calls an "upstream" API over a real HTTP request via `ctx.services` |
+| `10-validation` | 9010 | `validate()` covering body, query (with `z.coerce`), and route param validation, each with a passing and a failing request |
+| `11-cors` | 9011 | `createCorsMiddleware()` covering an allowed vs. disallowed origin, a preflight with custom headers and credentials, and a stricter multi-policy for `/admin` |
 
-### `full-featured.ts`
+### `full-featured.ts` (bonus)
 
-A small users API wiring several features together through nothing but
-the public exports of `empire-ts`: a singleton repository via the DI
+Not a mirror of a numbered example - a twelfth, combined showcase
+wiring several features together in one app through nothing but the
+public exports of `empire-ts`: a singleton repository via the DI
 container, logger and CORS middleware, Zod-based request validation,
 and `HttpError` for a clean 404.
 
@@ -66,21 +75,21 @@ npx tsx full-featured.ts
 ```
 
 ```bash
-curl http://localhost:9002/users
-curl -X POST http://localhost:9002/users -H "Content-Type: application/json" -d '{"name":"Ada","email":"ada@example.com"}'
-curl http://localhost:9002/users/1
-curl http://localhost:9002/users/999   # 404
+curl http://localhost:9012/users
+curl -X POST http://localhost:9012/users -H "Content-Type: application/json" -d '{"name":"Ada","email":"ada@example.com"}'
+curl http://localhost:9012/users/1
+curl http://localhost:9012/users/999   # 404
 ```
 
 ## What this proves
 
-Both examples were run for real against `node_modules/empire-ts`
-installed from the actual `npm pack` tarball - not a symlink into the
-source tree, not hand-copied files. If `tsc --noEmit` and both servers
-work here, the package genuinely works as published: the right things
-are exported from `dist/index.js`, the `.d.ts` files type-check
-correctly for a consumer, and `main`/`types` in `package.json` point
-where they should.
+All twelve were run for real against `node_modules/empire-ts` installed
+from the actual `npm pack` tarball - not a symlink into the source
+tree, not hand-copied files. If `tsc --noEmit` and every server works
+here, the package genuinely works as published: the right things are
+exported from `dist/index.js`, the `.d.ts` files type-check correctly
+for a consumer, and `main`/`types` in `package.json` point where they
+should.
 
 ## Updating the Source Code
 

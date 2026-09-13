@@ -1,0 +1,9 @@
+Quarterly Report — Sample File
+
+This file lives in examples/04-static-files/uploads/ and is served under
+the /uploads URL prefix, separately from the wwwroot/ folder mounted at
+the root.
+
+It demonstrates that Empire can serve more than one static folder from
+the same server, each at its own URL prefix, without the folders'
+contents colliding.

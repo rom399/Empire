@@ -6,11 +6,13 @@ dist/
 build/
 *.tgz
 
-# examples/06-react-app/dist is example source (a simulated React build
-# output), not a real build artifact - it needs to be committed for the
-# example to work when cloned
+# examples/06-react-app/dist (and its package-example mirror) is example
+# source (a simulated React build output), not a real build artifact - it
+# needs to be committed for the example to work when cloned
 !examples/06-react-app/dist/
 !examples/06-react-app/dist/**
+!package-example/examples/06-react-app/dist/
+!package-example/examples/06-react-app/dist/**
 
 # Logs
 *.log
