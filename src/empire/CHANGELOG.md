@@ -25,6 +25,10 @@ experimental notice in [README.MD](README.MD).
 
 ## [0.1.2] - 2026-09-14
 
+**Deprecated on npm** - `README.MD`'s links to anything not bundled
+with the package were still relative and broken for an npm reader; use
+`0.1.3` or later.
+
 ### Added
 
 - `CHANGELOG.md` (this file), now listed in `package.json`'s `files` so
@@ -42,6 +46,9 @@ experimental notice in [README.MD](README.MD).
 
 ## [0.1.1] - 2026-09-13
 
+**Deprecated on npm** - documentation was still wrong for this version;
+use `0.1.3` or later.
+
 ### Changed
 
 - Rewrote the package's `README.MD` to be consumer-facing (what someone
@@ -49,6 +56,9 @@ experimental notice in [README.MD](README.MD).
   dev-setup-oriented one. No code changes.
 
 ## [0.1.0] - 2026-09-12
+
+**Deprecated on npm** - documentation was still wrong for this version;
+use `0.1.3` or later.
 
 ### Added
 
