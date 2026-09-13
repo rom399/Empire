@@ -1,24 +1,43 @@
 {
-  "name": "empire",
-  "version": "1.0.0",
-  "description": "Empire is a lightweight TypeScript web framework built from scratch using Node.js.",
+  "name": "empire-ts",
+  "version": "0.1.1",
+  "description": "Experimental TypeScript HTTP framework built from scratch on Node's http module, inspired by ASP.NET Core. API may change without notice - not production-ready.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "test": "vitest run",
     "start": "tsx examples/01-basic-server/server.ts",
     "dev": "tsx watch examples/01-basic-server/server.ts",
     "typecheck": "tsc --noEmit",
     "examples": "tsx scripts/run-examples.ts",
-    "verify": "npm run typecheck && npm run test && npm run examples"
+    "verify": "npm run typecheck && npm run test && npm run examples",
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run verify && npm run build"
   },
   "keywords": [
     "typescript",
     "http",
     "web-framework",
-    "middleware"
+    "middleware",
+    "dependency-injection",
+    "aspnet",
+    "dotnet"
   ],
   "author": "Roman",
   "license": "MIT",
   "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rom399/Empire.git"
+  },
+  "homepage": "https://github.com/rom399/Empire#readme",
+  "bugs": {
+    "url": "https://github.com/rom399/Empire/issues"
+  },
   "devDependencies": {
     "@types/node": "^26.4.1",
     "tsx": "^4.23.13",

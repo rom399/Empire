@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 build/
+*.tgz
 
 # examples/06-react-app/dist is example source (a simulated React build
 # output), not a real build artifact - it needs to be committed for the

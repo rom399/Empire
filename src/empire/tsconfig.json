@@ -9,7 +9,8 @@
     "types": ["node"],
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "declaration": true
   },
   "include": ["src/**/*", "examples/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "dist"]
