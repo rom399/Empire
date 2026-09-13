@@ -1,0 +1,18 @@
+{
+  "name": "empire-ts-usage-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Standalone demo of consuming the published empire-ts package - not part of Empire's own examples/ suite, which imports the framework's source directly.",
+  "scripts": {
+    "basic-server": "tsx basic-server.ts",
+    "full-featured": "tsx full-featured.ts"
+  },
+  "dependencies": {
+    "empire-ts": "file:../empire-ts-0.1.1.tgz"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "zod": "^4.5.4"
+  }
+}
