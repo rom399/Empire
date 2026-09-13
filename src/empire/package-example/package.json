@@ -18,7 +18,7 @@
     "full-featured": "tsx full-featured.ts"
   },
   "dependencies": {
-    "empire-ts": "file:../empire-ts-0.1.1.tgz"
+    "empire-ts": "file:../empire-ts-0.1.2.tgz"
   },
   "devDependencies": {
     "tsx": "^4.23.13",

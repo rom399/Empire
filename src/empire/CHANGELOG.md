@@ -5,6 +5,23 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 package does not yet commit to strict semantic versioning - see the
 experimental notice in [README.MD](README.MD).
 
+## [0.1.2] - 2026-09-14
+
+### Added
+
+- `CHANGELOG.md` (this file), now listed in `package.json`'s `files` so
+  it ships with the package - `CHANGELOG*` isn't part of npm's automatic
+  README/LICENSE include list, so it had to be added explicitly.
+
+### Changed
+
+- `README.MD` revised: documents `package-example/`, a standalone demo
+  project that mirrors all 11 of Empire's examples plus a bonus combined
+  one, each one actually installed and run against a real `npm pack`
+  tarball rather than the source tree. Links to `README_DEVELOPMENT.MD`
+  (the full framework walkthrough, what this file used to be) for
+  building or contributing to Empire itself. No code changes.
+
 ## [0.1.1] - 2026-09-13
 
 ### Changed
