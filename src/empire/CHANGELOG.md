@@ -5,6 +5,24 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 package does not yet commit to strict semantic versioning - see the
 experimental notice in [README.MD](README.MD).
 
+## [0.1.3] - 2026-09-14
+
+### Fixed
+
+- `README.MD`'s links to anything not bundled with the npm package
+  (Empire's own `examples/`, `README_DEVELOPMENT.MD`) were relative,
+  so they worked on GitHub but would break for anyone reading this
+  from npmjs.com or from inside an installed `node_modules/empire-ts`.
+  Now full GitHub URLs.
+
+### Changed
+
+- Examples section: the bare `npx tsx examples/02-routing/server.ts`
+  run-command, which showed how to run something but not how the
+  package is used, replaced with the actual full source of
+  `01-basic-server` and `02-routing`, each importing from `"empire-ts"`.
+  No code changes.
+
 ## [0.1.2] - 2026-09-14
 
 ### Added
