@@ -1,13 +1,15 @@
 /**
- * Basic server - consuming the published empire-ts package.
+ * 01 - Basic Server (package-example mirror)
  *
- * Unlike Empire's own examples/ (which import the framework's source
- * directly, via "../../src/Empire"), this file imports only from the
- * package name, "empire-ts" - exactly what installing it from npm gives
- * you. Everything here comes from the single barrel export at
- * dist/index.js; there's no reaching into internal files.
+ * Same as Empire's examples/01-basic-server, but importing from the
+ * published "empire-ts" package instead of the framework's source tree.
+ * Demonstrates how to create and start an Empire server with:
+ * - ConsoleLogger injected via EmpireOptions
+ * - A basic GET route returning an HTML response
+ * - A basic POST route returning a JSON response
+ * - Graceful shutdown on SIGINT
  *
- * Run: npx tsx basic-server.ts   (from this directory, after npm install)
+ * Run: npx tsx examples/01-basic-server/server.ts   (from package-example/)
  * Open: http://localhost:9001
  */
 
@@ -25,11 +27,11 @@ app.get("/", (ctx) => {
         <!DOCTYPE html>
         <html>
             <head>
-                <title>empire-ts</title>
+                <title>Empire</title>
             </head>
             <body>
-                <h1>Hello from empire-ts</h1>
-                <p>This server is running entirely off the published npm package.</p>
+                <h1>Welcome to Empire</h1>
+                <p>A lightweight TypeScript web framework.</p>
             </body>
         </html>
     `);
