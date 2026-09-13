@@ -1,5 +1,10 @@
 # Empire
 
+> **Just want to use the empire-ts package?** This document covers the
+> framework's internals for people building or modifying the source. See
+> [README.MD](README.MD) instead for installing and using the published
+> `empire-ts` npm package.
+
 [![CI](https://github.com/rom399/Empire/actions/workflows/ci.yml/badge.svg)](https://github.com/rom399/Empire/actions/workflows/ci.yml)
 
 Empire is a lightweight TypeScript web framework built from scratch using Node.js.

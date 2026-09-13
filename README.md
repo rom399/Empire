@@ -61,11 +61,12 @@ await app.start();
 
 The framework source and its full documentation live in [`src/empire`](src/empire).
 
-**[Read the full documentation](src/empire/README.MD)** for routing, middleware, static files, error handling, logging, and request body limits, each with worked examples.
+* **[README_DEVELOPMENT.MD](src/empire/README_DEVELOPMENT.MD)** - the full documentation: routing, middleware, static files, error handling, logging, request body limits, and more, each with worked examples. Start here to build or contribute to Empire itself.
+* **[README.MD](src/empire/README.MD)** - installing and using the published `empire-ts` npm package. This is also the README bundled with the package on npm.
 
 ## Examples
 
-Ten runnable examples live in [`src/empire/examples`](src/empire/examples), each a single `server.ts` covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, dependency injection, and validation. See the [Examples section of the full documentation](src/empire/README.MD#examples) for the complete list with ports and descriptions.
+Eleven runnable examples live in [`src/empire/examples`](src/empire/examples), each a single `server.ts` covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, dependency injection, validation, and CORS. See the [Examples section of README_DEVELOPMENT.MD](src/empire/README_DEVELOPMENT.MD#examples) for the complete list with ports and descriptions.
 
 ```bash
 cd src/empire
