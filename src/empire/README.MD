@@ -4,11 +4,12 @@ A standalone demo of consuming **empire-ts** the way a real npm
 consumer would - `import { Empire } from "empire-ts"`, nothing else.
 This is deliberately separate from Empire's own
 [`examples/`](https://github.com/rom399/Empire/tree/main/src/empire/examples)
-folder, which imports the framework's source directly
-(`../../src/Empire`) to exercise the code as currently written;
-`package-example` instead exercises the actual **published package
-shape** - only what `dist/index.js` exports, nothing from internal
-files.
+folder, which is **for developers extending Empire itself** - it imports
+the framework's source directly (`../../src/Empire`) to exercise the
+code as currently written. `package-example` is for the opposite
+audience - **people who just want to use the empire-ts package** - and
+exercises the actual **published package shape** - only what
+`dist/index.js` exports, nothing from internal files.
 
 > `package-example` lives inside the Empire monorepo for convenience,
 > but nothing in it is Empire-specific tooling - delete its

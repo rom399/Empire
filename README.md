@@ -66,12 +66,14 @@ The framework source and its full documentation live in [`src/empire`](src/empir
 
 ## Examples
 
-Eleven runnable examples live in [`src/empire/examples`](src/empire/examples), each a single `server.ts` covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, dependency injection, validation, and CORS. See the [Examples section of README_DEVELOPMENT.MD](src/empire/README_DEVELOPMENT.MD#examples) for the complete list with ports and descriptions.
+Eleven runnable examples live in [`src/empire/examples`](src/empire/examples), each a single `server.ts` covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, dependency injection, validation, and CORS. **These are for developers extending Empire itself** - they import the source tree directly. See the [Examples section of README_DEVELOPMENT.MD](src/empire/README_DEVELOPMENT.MD#examples) for the complete list with ports and descriptions.
 
 ```bash
 cd src/empire
 npx tsx examples/02-routing/server.ts
 ```
+
+If you just want to know how to *use* the published `empire-ts` npm package rather than extend Empire itself, see [`src/empire/package-example`](src/empire/package-example) instead - it mirrors all eleven examples above against a real installed `empire-ts`, importing `"empire-ts"` rather than the source tree.
 
 ## Repository layout
 

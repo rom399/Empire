@@ -645,6 +645,13 @@ deliberately small limit so the 413 response is easy to trigger.
 
 ## Examples
 
+For developers extending Empire itself - each one imports the framework's
+source tree directly, so it runs against the code as currently written,
+not a published version. If you just want to know how to *use* the
+published `empire-ts` npm package, see `package-example/` instead - it
+mirrors every example below against a real installed `empire-ts` and is
+also documented in [`README.MD`](README.MD).
+
 Each example is a single, runnable `server.ts`. Run one with `npx tsx`,
 for example:
 
