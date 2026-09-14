@@ -10,8 +10,8 @@ The design is inspired by ASP.NET Core — middleware pipelines, dependency
 injection, strongly-typed context, and a clean separation of concerns.
 
 Current version: **0.17.0 — CORS (C-1 through C-11 complete)**. See
-`doc/PROJECT_STATE.md` for the up-to-date status and `PLAN.md` for the full
-phase-by-phase roadmap. No v1.0.0 blockers remain.
+`PLAN.md` for the full phase-by-phase roadmap and this doc's "Upcoming
+Features" section below for what's next. No v1.0.0 blockers remain.
 
 ---
 
@@ -86,6 +86,9 @@ empire/
 │   │   ├── ValidationSchemas.ts    # { body?, query?, params? } schemas accepted by validate()
 │   │   └── Validated.ts            # { body, query, params } passed to the wrapped handler
 │   ├── types.ts                    # Middleware, RouteHandler types
+│   ├── index.ts                    # Public barrel export - what "empire-ts" resolves to; omits
+│   │                                # internals (Router, RouteMatcher, StaticFileHandler, MimeTypes,
+│   │                                # sendErrorResponse) a consumer never touches directly
 │   └── Empire.ts                   # Main framework class — server lifecycle, middleware, delegates routing to Router
 │
 ├── tests/
@@ -114,7 +117,9 @@ empire/
 │       ├── services/                # TestLogger.ts — in-memory ILogger for tests
 │       └── http/                    # MockHttp.ts — IncomingMessage/ServerResponse stand-ins
 │
-├── examples/
+├── examples/                       # For developers extending Empire itself - imports the
+│   │                                # source tree directly ("../../src/Empire"), so these run
+│   │                                # against the code as currently written, not a published version
 │   ├── 01-basic-server/            # Hello world
 │   ├── 02-routing/                 # Route params (single and multi-segment), query
 │   │                                # strings, overlapping literal/param routes
@@ -126,27 +131,60 @@ empire/
 │   ├── 08-authentication/          # Writing your own auth middleware — Bearer tokens, ctx.state
 │   ├── 09-dependency-injection/    # DI container wired into a real app — singleton repository,
 │   │                                # scoped service calling a real HTTP endpoint via ctx.services
-│   └── 10-validation/              # validate() wired into real routes — body, query
-│                                    # (with coercion), and route param validation
+│   ├── 10-validation/              # validate() wired into real routes — body, query
+│   │                                # (with coercion), and route param validation
+│   └── 11-cors/                    # createCorsMiddleware() — allowed vs. disallowed origin,
+│                                    # a preflight with credentials, a stricter multi-policy
+│
+├── package-example/                # For people who just want to use the empire-ts npm package -
+│   │                                # imports "empire-ts", installed from a real `npm pack`
+│   │                                # tarball rather than the source tree. Own package.json,
+│   │                                # tsconfig.json, package-lock.json - a genuinely standalone project
+│   ├── examples/                   # Mirrors examples/ above 1:1 - same behavior, same routes,
+│   │   │                           # only the import changed to "empire-ts" and each port
+│   │   │                           # shifted by 1000 so both sets can run side by side
+│   │   ├── 01-basic-server/        # port 9001
+│   │   ├── 02-routing/             # port 9002
+│   │   ├── 03-middleware/          # port 9003
+│   │   ├── 04-static-files/        # port 9004 - own copies of wwwroot/ and uploads/ fixtures
+│   │   ├── 05-error-handling/      # port 9005
+│   │   ├── 06-react-app/           # port 9006 - own copy of the dist/ fixture
+│   │   ├── 07-body-size-limit/     # port 9007
+│   │   ├── 08-authentication/      # port 9008
+│   │   ├── 09-dependency-injection/ # port 9009
+│   │   ├── 10-validation/          # port 9010
+│   │   └── 11-cors/                # port 9011
+│   └── full-featured.ts            # port 9012 - bonus, not a mirror: DI + logger/CORS middleware +
+│                                    # Zod validation + HttpError combined in one app
 │
 ├── doc/
 │   ├── ARCHITECTURE.md             # This file
-│   ├── PROJECT_STATE.md            # Current status and next steps
 │   └── features/                   # One doc per in-flight or completed feature build
 │       ├── DEPENDENCY_INJECTION.md # Full DI design: tokens, lifetimes, scoping, disposal,
 │       │                           # graceful shutdown, decisions log
-│       └── VALIDATION.md           # Full validation design: the Zod dependency decision,
-│                                    # validate() wrapper, ValidationError, decisions log
+│       ├── VALIDATION.md           # Full validation design: the Zod dependency decision,
+│       │                           # validate() wrapper, ValidationError, decisions log
+│       └── CORS.md                 # Full CORS design: preflight vs. Router's existing OPTIONS
+│                                    # handling, credentials/wildcard guard, multi-policy, decisions log
 │
 ├── scripts/
 │   └── run-examples.ts             # Smoke-tests every examples/ app — run via `npm run examples`,
 │                                    # part of `npm run verify` and CI
-├── .claude/skills/                 # commit-message, empire-feature, empire-review
+├── .claude/skills/                 # commit-message, empire-feature, empire-npm-readme, empire-review
 ├── CLAUDE.md                       # Always-true facts only — loads every agent turn
 ├── PLAN.md                         # Full phase-by-phase roadmap
 ├── CONTRIBUTING.md                 # Contribution conventions
+├── README.MD                       # The npm package's own README - what npm bundles for empire-ts
+├── README_DEVELOPMENT.MD           # The full framework walkthrough - this repo's real front door
+├── CHANGELOG.md                    # Version history, bundled with the npm package
+├── LICENSE                         # MIT, bundled with the npm package (copied from the repo root)
 ├── package.json
-└── tsconfig.json
+├── tsconfig.json                   # Whole-repo typecheck - src/, examples/, and scripts/ together
+├── tsconfig.build.json             # Scoped package build - src/ only, emits dist/
+├── .npmignore                      # Predates the "files" allowlist in package.json; now redundant -
+│                                    # everything it excludes is already outside "files"
+├── .gitignore
+└── dist/                           # Build output (git-ignored) - what npm actually ships
 ```
 
 CI (`.github/workflows/ci.yml`) and Dependabot (`.github/dependabot.yml`)
@@ -669,7 +707,7 @@ have been moved into the Resolved list. Two genuinely open items remain:
 | Only one SPA fallback per server | Can't serve two different single-page apps from one `Empire` instance | Not currently needed; `Router.setFallback()` would need to become a list with its own matching logic if this comes up |
 | No route-scoped/path-scoped middleware - every registered middleware runs for every request, unconditionally, before routing | Can't restrict a middleware to e.g. `/admin/*` without hand-rolling path checks inside it. `examples/08-authentication` already does this by hand; `doc/features/CORS.md` §2.6 does the same thing again, specifically for per-path CORS policies, rather than wait for a real fix | Tracked in `PLAN.md` Phase 3 ("Route-level middleware", remaining, unstarted). A real fix changes `Empire.handleRequest()`'s core dispatch model - the middleware loop would need to become path-aware, not just another addition wrapped around the existing pipeline the way DI, Validation, and CORS all were |
 
-**Resolved** (kept here for history — see `doc/PROJECT_STATE.md` for current status):
+**Resolved** (kept here for history — see `PLAN.md` for current status):
 - ~~Routing lived in `Empire.ts`~~ — extracted to `src/routing/Router.ts`
 - ~~Middleware took `(req, res, next)` not `(ctx, next)`~~ — migrated
 - ~~Static files API undecided~~ — kept `useStaticFiles(root, options?)`, added prefix mounting
