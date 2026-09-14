@@ -1376,6 +1376,10 @@ class UserController {
 * Constructor injection
 * Action execution
 
+Expanded into the full MVC pattern (model binding, `IActionResult`-style
+responses, the server-rendered-views open question) as Phase 22 -
+this entry's original scope is now tracked there.
+
 ---
 
 ## Phase 15 — Advanced Dependency Injection
@@ -1417,7 +1421,7 @@ doc yet and remain unstarted.
 
 ### Tasks
 
-* Compression
+* Compression — expanded into its own Phase 20
 * ✅ CORS middleware — `createCorsMiddleware()`,
   `src/middleware/CorsMiddleware.ts`, `CorsOptions.ts`, `CorsPolicy.ts`,
   `CorsConfig.ts`; full design and decisions log in `doc/features/CORS.md`
@@ -1459,9 +1463,106 @@ Example: `examples/11-cors/server.ts`. Tests: `tests/unit/middleware/CorsMiddlew
 
 ---
 
+## Phase 19 — CSP/XSS Protection
+
+Design doc: `doc/design/csp-xss-protection.md`.
+
+> That path doesn't exist in this repo as of this writing, and doesn't
+> match the project's `doc/features/` convention (see `CLAUDE.md`) - the
+> doc needs to be added (at this path or `doc/features/`) before this
+> phase's design is considered real rather than referenced.
+
+Target API:
+
+```ts
+app.use(useSecurityHeaders({ /* ... */ }));
+```
+
+### Tasks
+
+* Content-Security-Policy header generation
+* XSS-protection headers
+
+---
+
+## Phase 20 — Response Compression
+
+Design doc: `doc/design/response-compression.md`. Covers Gzip and
+Brotli; buffer-then-compress for v1 (not streaming). Supersedes the
+"Compression" line item under Phase 16, which predates this phase.
+
+> Same caveat as Phase 19 - this path doesn't exist in this repo yet.
+
+Target API:
+
+```ts
+app.use(useCompression());
+```
+
+### Tasks
+
+* Gzip encoding
+* Brotli encoding
+* `Content-Encoding` negotiation via `Accept-Encoding`
+
+---
+
+## Phase 21 — Usage / Statistics Tracking
+
+Not yet designed. Same opt-in middleware pattern as Phases 19 and 20 -
+no core framework changes, registered via the existing `app.use()`.
+
+### Tasks
+
+* Request counts per route
+* Response time distributions
+* Status code breakdowns
+
+---
+
+## Phase 22 — MVC Pattern (Controllers, Actions, Model Binding)
+
+Not yet designed. Expands Phase 14's original Controllers scope -
+ASP.NET Core-style `@Controller`/`@Get`/`@Post` decorators registering
+through the existing `Router`, `IActionResult`-style response helpers,
+and model binding for route params/query/body, likely built on the
+existing Zod-based validation (`src/validation/`) rather than a
+separate mechanism.
+
+**Open question:** whether this includes server-rendered views, or
+stays API-only (controllers without a V) - not resolved yet.
+
+### Tasks
+
+* Controller discovery
+* Route generation from decorators
+* Constructor injection (see Phase 15's note on why automatic-by-type
+  injection needs a new dependency Empire doesn't currently take)
+* Action execution
+* `IActionResult`-style response helpers
+* Model binding (route params / query / body)
+
+---
+
+## Phase 23 — Simple Load Balancer
+
+Not yet designed. Explicitly a learning/local-dev feature, not
+production-grade. Depends on Phase 21 (Usage/Statistics Tracking) for
+live per-backend metrics - least-connections specifically needs active
+request counts to route by.
+
+### Tasks
+
+* Round robin
+* Weighted round robin
+* Least connections (needs Phase 21's per-backend request counts)
+* Layer 7 header-based routing
+
+---
+
 ## Long-Term Ideas
 
-* MVC
+* ~~MVC~~ — promoted to Phase 22
 * Plugin system
 * Module system
 * CLI tooling

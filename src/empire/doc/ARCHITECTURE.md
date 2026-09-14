@@ -690,3 +690,34 @@ have been moved into the Resolved list. Two genuinely open items remain:
 - ~~`RouteMatcher` filtered empty path segments (FINDING 12)~~ - doubled slashes are now rejected rather than silently collapsed, see PLAN.md Phase 9.3
 - ~~`HttpError` had no `code`/`retryable`, and `.name` wasn't set (FINDING 13)~~ - both added, see PLAN.md Phase 9.3
 - ~~Static file path-traversal guard was a bare `startsWith(root)` (FINDING 2)~~ - now requires a path-separator boundary, see PLAN.md Phase 9.3
+
+---
+
+## Upcoming Features
+
+Planned build order after CORS (version 0.17.0 above), tracked as
+`PLAN.md` Phases 19-23:
+
+1. **CSP/XSS protection** (`useSecurityHeaders()`) - Phase 19, design doc
+   `doc/features/csp-xss-protection.md`
+2. **Response compression** (`useCompression()`) - Phase 20, Gzip and
+   Brotli, buffer-then-compress for v1, design doc
+   `doc/features/response-compression.md`
+3. **Usage/statistics tracking middleware** - Phase 21, request counts
+   per route, response time distributions, status code breakdowns; not
+   yet designed
+4. **MVC pattern** (controllers, actions, model binding) - Phase 22,
+   expands the existing Phase 14 Controllers stub; open question on
+   server-rendered views vs. API-only; not yet designed
+5. **Simple load balancer** (round robin, weighted round robin, least
+   connections, Layer 7 header-based routing) - Phase 23, explicitly a
+   learning/local-dev feature, not production-grade; depends on Phase 21
+   for live per-backend metrics
+
+Both design docs referenced above (items 1 and 2) do not exist in this
+repository as of this writing - the paths shown here use
+`doc/features/`, matching this project's own convention (`CLAUDE.md`);
+`PLAN.md` records the original `doc/design/` path they were requested
+at, since that's what was asked for, but that folder doesn't exist and
+doesn't match convention. Add the actual files (at whichever path is
+correct) before treating either as a real, followable design.
