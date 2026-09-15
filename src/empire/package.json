@@ -13,6 +13,7 @@
     "start": "tsx examples/01-basic-server/server.ts",
     "dev": "tsx watch examples/01-basic-server/server.ts",
     "typecheck": "tsc --noEmit",
+    "lint": "oxlint --type-aware",
     "examples": "tsx scripts/run-examples.ts",
     "verify": "npm run typecheck && npm run test && npm run examples",
     "build": "tsc -p tsconfig.build.json",
@@ -40,6 +41,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
+    "oxlint": "^1.83.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
