@@ -17,6 +17,8 @@ Check every changed file against `CONTRIBUTING.md` before a PR is opened. Report
 - **Constructor injection only** - no service locator pattern.
 - **A test file exists for every new or changed class**, mirroring its path under `tests/unit/`, covering failure cases as well as the golden path.
 - **Examples touched or added actually run** - not just compile. If a PR adds or changes `examples/`, confirm `npm run examples` (or the specific example) was actually executed, not just written.
+- **`npm run lint` passes cleanly** - oxlint, type-aware, configured in `.oxlintrc.json`. A finding left in place needs a documented `// oxlint-disable-next-line <rule> -- <reason>` comment (see `tests/fixtures/http/MockHttp.ts` for the pattern - a confirmed tsgolint false positive, verified against `tsc --noEmit` before suppressing), not a silent ignore.
+- **If a changed file lives under `examples/`, its mirrors were updated too** - see `empire-example-edit` for what to check.
 
 ## Output
 
