@@ -229,4 +229,4 @@ async function main(): Promise<void> {
     console.log(`\nAll ${examples.length} examples passed.`);
 }
 
-main();
+void main();

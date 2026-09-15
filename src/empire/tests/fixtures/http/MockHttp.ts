@@ -11,6 +11,7 @@ import type http from "http";
  * only ever touch the members built here, so the object is cast to
  * http.ServerResponse at the call site rather than genuinely implementing it.
  */
+// oxlint-disable-next-line typescript/no-redundant-type-constituents -- tsgolint false positive on http.ServerResponse's generics; tsc --noEmit passes clean on this line
 export type MockResponse = http.ServerResponse & { body: string };
 
 interface MockRequestOptions {

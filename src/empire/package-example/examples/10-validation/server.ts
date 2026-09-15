@@ -96,4 +96,4 @@ process.on("SIGINT", async () => {
     }
 });
 
-start();
+void start();

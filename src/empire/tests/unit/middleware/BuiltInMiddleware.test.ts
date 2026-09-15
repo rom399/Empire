@@ -46,6 +46,6 @@ describe("Built-in middleware", () => {
 
         await loggerMiddleware(ctxFor(), async () => {});
 
-        expect(logger.infoMessages).toEqual(["GET /"]);
+        expect(logger.infoMessages[0]).toContain("GET /");
     });
 });

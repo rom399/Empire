@@ -246,7 +246,7 @@ export class Context {
 
         try {
             return JSON.parse(body);
-        } catch (error) {
+        } catch {
             throw new BadRequestError("Invalid JSON");
         }
     }
