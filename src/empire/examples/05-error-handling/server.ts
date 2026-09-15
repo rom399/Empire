@@ -3,7 +3,10 @@
  *
  * Demonstrates Empire's error handling with:
  * - Throwing HttpError from a route with a custom status code and message
- * - Throwing BadRequestError for invalid input
+ * - Schema-based validation via validate() automatically throwing
+ *   ValidationError (a BadRequestError) for invalid input, rather than
+ *   hand-checking fields on an unchecked body cast - see
+ *   examples/10-validation for validate() covering more schema shapes
  * - Automatic 400 response when ctx.jsonBody() receives invalid JSON
  * - Automatic 500 response for unhandled errors
  * - Server continues running after exceptions
@@ -13,9 +16,10 @@
  */
 
 import process from "process";
+import { z } from "zod";
 import { Empire } from "../../src/Empire";
 import { HttpError } from "../../src/errors/HttpError";
-import { BadRequestError } from "../../src/errors/BadRequestError";
+import { validate } from "../../src/validation/validate";
 
 const app = new Empire({
     host: "localhost",
@@ -33,27 +37,22 @@ app.get("/products/:id", (ctx) => {
     ctx.json({ id, name: `Product ${id}` });
 });
 
-app.get("/restricted", (ctx) => {
+app.get("/restricted", () => {
     throw new HttpError(403, "You do not have permission to access this resource");
 });
 
-app.post("/orders", async (ctx) => {
-    const body = await ctx.jsonBody() as { productId: string; quantity: number };
+const createOrderSchema = z.object({
+    productId: z.string().min(1, "productId is required"),
+    quantity: z.number().int().min(1, "quantity must be a positive number"),
+});
 
-    if (!body.productId) {
-        throw new BadRequestError("productId is required");
-    }
-
-    if (!body.quantity || body.quantity < 1) {
-        throw new BadRequestError("quantity must be a positive number");
-    }
-
+app.post("/orders", validate({ body: createOrderSchema })(async (ctx, { body }) => {
     ctx.status(201).json({
         orderId: "ORD-001",
         productId: body.productId,
         quantity: body.quantity,
     });
-});
+}));
 
 app.get("/crash", () => {
     throw new Error("Unexpected error — server should survive this and return 500");
@@ -81,4 +80,4 @@ process.on("SIGINT", async () => {
     }
 });
 
-start();
+void start();

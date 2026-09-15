@@ -38,6 +38,7 @@
 
 import process from "process";
 import * as http from "http";
+import { z } from "zod";
 import { Empire } from "../../src/Empire";
 import { Context } from "../../src/http/Context";
 import { HttpError } from "../../src/errors/HttpError";
@@ -46,6 +47,7 @@ import { ServiceCollection } from "../../src/di/ServiceCollection";
 import { createToken } from "../../src/di/ServiceToken";
 import { ILogger } from "../../src/logging/ILogger";
 import { ConsoleLogger } from "../../src/logging/ConsoleLogger";
+import { validate } from "../../src/validation/validate";
 
 const PORT = 8009;
 
@@ -214,13 +216,17 @@ app.get("/records/:id", async (ctx) => {
     ctx.json(record);
 });
 
-app.post("/records", async (ctx) => {
+const createRecordSchema = z.object({
+    name: z.string().min(1, "name is required"),
+    value: z.number(),
+});
+
+app.post("/records", validate({ body: createRecordSchema })(async (ctx, { body }) => {
     const repository = await requireServices(ctx).resolve(RecordRepositoryToken);
-    const body = await ctx.jsonBody() as { name: string; value: number };
     const record = await repository.create(body);
 
     ctx.status(201).json(record);
-});
+}));
 
 app.get("/upstream-summary", async (ctx) => {
     const upstreamApi = await requireServices(ctx).resolve(UpstreamApiServiceToken);
@@ -249,4 +255,4 @@ process.on("SIGINT", async () => {
     }
 });
 
-start();
+void start();

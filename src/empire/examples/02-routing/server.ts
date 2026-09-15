@@ -19,7 +19,9 @@
  */
 
 import process from "process";
+import { z } from "zod";
 import { Empire } from "../../src/Empire";
+import { validate } from "../../src/validation/validate";
 
 const app = new Empire({
     host: "localhost",
@@ -65,9 +67,12 @@ app.get("/users/:id", (ctx) => {
     ctx.json(user);
 });
 
-app.post("/users", async (ctx) => {
-    const body = await ctx.jsonBody() as { name: string; role: string };
+const createUserSchema = z.object({
+    name: z.string().min(1, "name is required"),
+    role: z.string().optional(),
+});
 
+app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) => {
     const newUser = {
         id:   String(users.length + 1),
         name: body.name,
@@ -77,9 +82,14 @@ app.post("/users", async (ctx) => {
     users.push(newUser);
 
     ctx.status(201).json(newUser);
+}));
+
+const replaceUserSchema = z.object({
+    name: z.string().min(1, "name is required"),
+    role: z.string().min(1, "role is required"),
 });
 
-app.put("/users/:id", async (ctx) => {
+app.put("/users/:id", validate({ body: replaceUserSchema })(async (ctx, { body }) => {
     const index = users.findIndex((u) => u.id === ctx.params.id);
 
     if (index === -1) {
@@ -87,16 +97,19 @@ app.put("/users/:id", async (ctx) => {
         return;
     }
 
-    const body = await ctx.jsonBody() as { name: string; role: string };
-
     // Full replace — every field comes from the request body, nothing
     // carries over from the existing user except the id from the URL.
     users[index] = { id: ctx.params.id, name: body.name, role: body.role };
 
     ctx.json(users[index]);
+}));
+
+const updateUserSchema = z.object({
+    name: z.string().min(1, "name is required").optional(),
+    role: z.string().min(1, "role is required").optional(),
 });
 
-app.patch("/users/:id", async (ctx) => {
+app.patch("/users/:id", validate({ body: updateUserSchema })(async (ctx, { body }) => {
     const user = users.find((u) => u.id === ctx.params.id);
 
     if (!user) {
@@ -105,12 +118,10 @@ app.patch("/users/:id", async (ctx) => {
     }
 
     // Partial update — only fields present in the body are touched.
-    const body = await ctx.jsonBody() as Partial<{ name: string; role: string }>;
-
     Object.assign(user, body);
 
     ctx.json(user);
-});
+}));
 
 app.delete("/users/:id", (ctx) => {
     const index = users.findIndex((u) => u.id === ctx.params.id);
@@ -184,4 +195,4 @@ process.on("SIGINT", async () => {
     }
 });
 
-start();
+void start();

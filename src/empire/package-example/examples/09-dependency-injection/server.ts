@@ -33,6 +33,7 @@
 
 import process from "process";
 import * as http from "http";
+import { z } from "zod";
 import {
     Empire,
     Context,
@@ -42,6 +43,7 @@ import {
     createToken,
     ILogger,
     ConsoleLogger,
+    validate,
 } from "empire-ts";
 
 const PORT = 9009;
@@ -209,13 +211,17 @@ app.get("/records/:id", async (ctx) => {
     ctx.json(record);
 });
 
-app.post("/records", async (ctx) => {
+const createRecordSchema = z.object({
+    name: z.string().min(1, "name is required"),
+    value: z.number(),
+});
+
+app.post("/records", validate({ body: createRecordSchema })(async (ctx, { body }) => {
     const repository = await requireServices(ctx).resolve(RecordRepositoryToken);
-    const body = await ctx.jsonBody() as { name: string; value: number };
     const record = await repository.create(body);
 
     ctx.status(201).json(record);
-});
+}));
 
 app.get("/upstream-summary", async (ctx) => {
     const upstreamApi = await requireServices(ctx).resolve(UpstreamApiServiceToken);
@@ -244,4 +250,4 @@ process.on("SIGINT", async () => {
     }
 });
 
-start();
+void start();
