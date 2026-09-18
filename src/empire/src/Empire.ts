@@ -218,7 +218,7 @@ export class Empire {
     });
 
     const timedOut = new Promise<"timeout">((resolve) => {
-      setTimeout(() => resolve("timeout"), this.shutdownTimeoutMs);
+      setTimeout(() => resolve("timeout"), this.shutdownTimeoutMs).unref();
     });
 
     const outcome = await Promise.race([
