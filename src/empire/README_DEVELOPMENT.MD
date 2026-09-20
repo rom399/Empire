@@ -503,6 +503,8 @@ crashes just stops renewing and drops out of rotation after one lease TTL.
 Nothing on the balancer lists backends, and adding or killing one needs no
 restart.
 
+### Setting it up
+
 The balancer app:
 
 ```ts
@@ -539,7 +541,9 @@ await registration.stop();    // deregister first ...
 await app.stop();             // ... then stop serving
 ```
 
-**Ordering rules** - several, and they matter:
+### Ordering rules
+
+Several, and they matter:
 
 * Everything the balancer app answers itself (the dashboard, the
   registration endpoint, a health route) must be registered *before* the
@@ -555,7 +559,9 @@ await app.stop();             // ... then stop serving
   registry, from your shutdown handler. An open dashboard tab is a stream
   that never finishes by itself.
 
-**Security defaults.** Whoever can register a backend can steer the
+### Security defaults
+
+Whoever can register a backend can steer the
 balancer's traffic, so registration is locked down: a bearer `token` is
 required (compared in constant time; omitting it throws at startup unless
 you pass `allowUnauthenticated: true`), and only loopback clients are
@@ -565,7 +571,9 @@ loopback check reads the socket's real peer address - never
 `X-Forwarded-For`, which a client controls. Setting `allowRemote` *and*
 `allowUnauthenticated` together builds an open relay; don't.
 
-**Strategies.** `ILoadBalancingStrategy.select(backends, ctx)` picks the
+### Strategies
+
+`ILoadBalancingStrategy.select(backends, ctx)` picks the
 backend for each request. It is handed the eligible list on every call
 rather than owning it, since the list changes as backends register and
 expire. `RoundRobinStrategy` is the default; `LeastConnectionsStrategy` sends each
@@ -586,14 +594,18 @@ construction otherwise, since a strategy reading counts that never move would qu
 behave like round robin. A backend that fails fast settles its requests instantly and
 so looks least loaded; that needs an error-rate penalty, which is not built yet.
 
-**Failures.** No eligible backend answers `503` (a normal state for a
+### Failures
+
+No eligible backend answers `503` (a normal state for a
 balancer started before its first backend); a connect error is `502`; no
 response headers within `timeoutMs` is `504` (the time to first headers,
 not total duration, so long streamed responses are not cut off); a backend
 dying mid-body destroys the client connection; a client disconnecting
 destroys the upstream request. All of it is reported to the monitor.
 
-**Route templates.** The balancer only sees raw paths, but the backend's
+### Route templates
+
+The balancer only sees raw paths, but the backend's
 `Router` knows the pattern it matched. `ctx.route` holds it (`/users/:id`,
 not `/users/42`; `undefined` for a 404 or the SPA fallback), and
 `createRouteHeaderMiddleware()` sends it as `X-Empire-Route`, which the
@@ -604,7 +616,9 @@ structure, so only enable it on backends that only the balancer talks to.
 Query strings are dropped from everything the dashboard shows unless you
 pass `includeQueryString: true`.
 
-**The dashboard** at `/_lb` is a self-contained page - a three.js scene
+### The dashboard
+
+The dashboard at `/_lb` is a self-contained page - a three.js scene
 plus a plain-DOM overlay - fed by a Server-Sent Events stream. The balancer
 is a hub, backends sit on a ring around it (so round robin reads as a sweep
 around the circle), and every request is a particle flying from the hub to
@@ -629,6 +643,8 @@ createLoadBalancerDashboard(monitor, {
 ```
 
 If three.js or WebGL is unavailable the overlay still works on its own.
+
+### Try it
 
 See `examples/12-load-balancer` - a balancer, a configurable backend and a
 traffic generator, with a scripted walkthrough in its header comment. Start the

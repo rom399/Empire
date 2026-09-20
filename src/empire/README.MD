@@ -352,9 +352,15 @@ curl http://localhost:9012/users/999   # 404
 **learning and local-development tool, not a production edge**: no TLS, no
 HTTP/2, no WebSocket upgrades, no retries.
 
+### How it works
+
 Backends register themselves and hold a lease; a backend that crashes
-simply drops out of rotation when the lease expires. A few rules to know
-before using it:
+simply drops out of rotation when the lease expires. Requests are streamed
+to backends by a pluggable strategy - `RoundRobinStrategy` by default, or
+`LeastConnectionsStrategy`, which sends each request to the backend with the
+fewest requests in flight. The dashboard shows it all live.
+
+### Rules to know before using it
 
 - Register the dashboard and the registration endpoint *before* the load
   balancer middleware, which is terminal, and register the load balancer
@@ -368,6 +374,8 @@ before using it:
   your traffic - do not combine `allowRemote` with `allowUnauthenticated`.
 - The dashboard loads three.js from a CDN in the browser by default; pass a
   local `three` install via `threeLocalPath` to work offline.
+
+### Learn more
 
 This is not mirrored in `package-example/` yet. The full walkthrough is in
 [README_DEVELOPMENT.MD](https://github.com/rom399/Empire/blob/main/src/empire/README_DEVELOPMENT.MD)
