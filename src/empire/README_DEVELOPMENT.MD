@@ -488,6 +488,8 @@ multi-policy form together.
 
 ## Load Balancer
 
+![The load balancer example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](doc/images/load-balancer-example.gif)
+
 A small layer-7 reverse proxy, built from the same pieces as everything
 else - plain middleware registered through `app.use()`, nothing added to
 `Empire.ts` (see [`doc/features/Loadbalancer-v1.md`](doc/features/Loadbalancer-v1.md)
@@ -632,8 +634,6 @@ See `examples/12-load-balancer` - a balancer, a configurable backend and a
 traffic generator, with a scripted walkthrough in its header comment. Start the
 balancer as `server.ts least-connections` to compare the two strategies against the
 same backends.
-
-![The example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](doc/images/load-balancer-example.gif)
 
 ## Authentication
 

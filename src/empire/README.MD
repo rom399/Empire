@@ -343,6 +343,8 @@ curl http://localhost:9012/users/999   # 404
 
 ## Load balancer (experimental)
 
+![The load balancer example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](https://raw.githubusercontent.com/rom399/Empire/main/src/empire/doc/images/load-balancer-example.gif)
+
 `empire-ts` also exports a small layer-7 load balancer -
 `createLoadBalancerMiddleware`, `BackendRegistry`,
 `createBackendRegistrationEndpoint`, `LoadBalancerRegistration` and
