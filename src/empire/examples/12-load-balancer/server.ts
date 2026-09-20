@@ -12,14 +12,15 @@
  *
  *   1. createLoadBalancerDashboard    - the live 3D view, at /_lb
  *   2. createBackendRegistrationEndpoint - where backends announce themselves, at /_lb/registry
- *   3. createLoadBalancerMiddleware   - the proxy itself, round robin by default
+ *   3. createLoadBalancerMiddleware   - the proxy itself, round robin unless told otherwise
  *
  * Backends register themselves and keep a lease alive with heartbeats; nothing
  * here lists them. The lease is 5 seconds so a killed backend leaves the
  * ring quickly enough to watch (the library default is 15).
  *
  * Run (each in its own terminal):
- *   npx tsx examples/12-load-balancer/server.ts                       # this balancer, port 8012
+ *   npx tsx examples/12-load-balancer/server.ts                       # this balancer, port 8012, round robin
+ *   npx tsx examples/12-load-balancer/server.ts least-connections     # the same, choosing by requests in flight
  *   npx tsx examples/12-load-balancer/backend.ts alpha 8021           # a backend
  *   npx tsx examples/12-load-balancer/backend.ts beta 8022 40         # a slower one (40 ms base latency)
  *   npx tsx examples/12-load-balancer/traffic.ts                      # steady traffic through the balancer
@@ -46,6 +47,13 @@
  *      different from "shut down cleanly".
  *   7. Ctrl-C this balancer and start it again. The backends re-register by
  *      themselves within one heartbeat, since a heartbeat is just a registration.
+ *   8. Restart it as `server.ts least-connections`, with traffic.ts still running.
+ *      Round robin gave gamma (the slow one) a third of the requests however long
+ *      it held them; now the hub reads "least-connections" and gamma's share
+ *      shrinks, because a backend still busy with earlier requests is passed over.
+ *      A run at traffic.ts 30 makes it plain: gamma served about a quarter of the
+ *      requests, against a third under round robin.
+ *      Its tall route stalks stop growing as fast and its halo dims.
  *
  * Set EMPIRE_LB_TOKEN on the balancer and every backend to change the shared
  * secret; the default below is for local demos only. Registration is open to
@@ -60,6 +68,8 @@ import { createBackendRegistrationEndpoint } from "../../src/loadbalancing/regis
 import { createLoadBalancerDashboard } from "../../src/loadbalancing/dashboard/LoadBalancerDashboard";
 import { createLoadBalancerMiddleware } from "../../src/loadbalancing/proxy/LoadBalancerMiddleware";
 import { LoadBalancerMonitor } from "../../src/loadbalancing/monitoring/LoadBalancerMonitor";
+import { ILoadBalancingStrategy } from "../../src/loadbalancing/strategy/ILoadBalancingStrategy";
+import { LeastConnectionsStrategy } from "../../src/loadbalancing/strategy/LeastConnectionsStrategy";
 import { RoundRobinStrategy } from "../../src/loadbalancing/strategy/RoundRobinStrategy";
 
 const PORT = 8012;
@@ -67,6 +77,27 @@ const LEASE_TTL_MS = 5000;
 const PROXY_TIMEOUT_MS = 10_000;
 const SHUTDOWN_TIMEOUT_MS = 2000;
 const TOKEN = process.env.EMPIRE_LB_TOKEN ?? "dev-token";
+
+const ROUND_ROBIN = "round-robin";
+const LEAST_CONNECTIONS = "least-connections";
+const strategyName = process.argv[2] ?? ROUND_ROBIN;
+
+/**
+ * Least connections reads the monitor's in-flight counts, so it is built
+ * from the same monitor the balancer reports to - the load balancer refuses
+ * to start otherwise.
+ */
+function createStrategy(name: string, monitor: LoadBalancerMonitor): ILoadBalancingStrategy {
+    switch (name) {
+        case ROUND_ROBIN:
+            return new RoundRobinStrategy();
+        case LEAST_CONNECTIONS:
+            return new LeastConnectionsStrategy(monitor);
+        default:
+            console.error(`Unknown strategy "${name}" - use ${ROUND_ROBIN} or ${LEAST_CONNECTIONS}`);
+            process.exit(1);
+    }
+}
 
 const app = new Empire({
     host: "127.0.0.1",
@@ -83,7 +114,7 @@ const dashboard = createLoadBalancerDashboard(monitor, { path: "/_lb" });
 const loadBalancer = createLoadBalancerMiddleware({
     registry,
     monitor,
-    strategy: new RoundRobinStrategy(),
+    strategy: createStrategy(strategyName, monitor),
     timeoutMs: PROXY_TIMEOUT_MS,
     logger: app.logger,
 });
@@ -95,7 +126,7 @@ app.use(loadBalancer);
 async function start(): Promise<void> {
     try {
         await app.start();
-        app.logger.info(`Dashboard: http://localhost:${PORT}/_lb   Registry: http://127.0.0.1:${PORT}/_lb/registry`);
+        app.logger.info(`Dashboard: http://localhost:${PORT}/_lb   Registry: http://127.0.0.1:${PORT}/_lb/registry   Strategy: ${strategyName}`);
     } catch (err) {
         app.logger.error("Failed to start server", err);
         process.exit(1);

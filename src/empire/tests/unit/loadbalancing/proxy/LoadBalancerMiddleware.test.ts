@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { createLoadBalancerMiddleware } from "../../../../src/loadbalancing/proxy/LoadBalancerMiddleware";
 import { ILoadBalancerMiddleware } from "../../../../src/loadbalancing/proxy/ILoadBalancerMiddleware";
+import { LeastConnectionsStrategy } from "../../../../src/loadbalancing/strategy/LeastConnectionsStrategy";
 import { ILoadBalancingStrategy } from "../../../../src/loadbalancing/strategy/ILoadBalancingStrategy";
 import { BackendRegistry } from "../../../../src/loadbalancing/backends/BackendRegistry";
 import { LoadBalancerMonitor } from "../../../../src/loadbalancing/monitoring/LoadBalancerMonitor";
@@ -92,6 +93,41 @@ describe("createLoadBalancerMiddleware", () => {
             createLoadBalancerMiddleware({ backends: [{ id: "a", url: "http://127.0.0.1:1" }], monitor }).dispose();
 
             expect(monitor.snapshot().strategy).toBe("round-robin");
+        });
+    });
+
+    describe("strategies that read live load", () => {
+
+        const STATIC_BACKENDS = [{ id: "a", url: "http://127.0.0.1:1" }];
+
+        it("accepts a strategy reading the very monitor the balancer reports to", () => {
+            const strategy = new LeastConnectionsStrategy(monitor);
+
+            expect(() => createLoadBalancerMiddleware({ backends: STATIC_BACKENDS, strategy, monitor }).dispose()).not.toThrow();
+        });
+
+        it("refuses a strategy reading a different monitor", () => {
+            const strategy = new LeastConnectionsStrategy(new LoadBalancerMonitor({ logger: new TestLogger() }));
+
+            expect(() => createLoadBalancerMiddleware({ backends: STATIC_BACKENDS, strategy, monitor }))
+                .toThrow(/least-connections.*same monitor/);
+        });
+
+        it("refuses one when the balancer has no monitor at all", () => {
+            const strategy = new LeastConnectionsStrategy(monitor);
+
+            expect(() => createLoadBalancerMiddleware({ backends: STATIC_BACKENDS, strategy })).toThrow(/same monitor/);
+        });
+
+        it("leaves a strategy that reads no live load unaffected, with or without a monitor", () => {
+            expect(() => createLoadBalancerMiddleware({ backends: STATIC_BACKENDS }).dispose()).not.toThrow();
+            expect(() => createLoadBalancerMiddleware({ backends: STATIC_BACKENDS, monitor }).dispose()).not.toThrow();
+        });
+
+        it("labels the hub with the strategy's name", () => {
+            createLoadBalancerMiddleware({ backends: STATIC_BACKENDS, strategy: new LeastConnectionsStrategy(monitor), monitor }).dispose();
+
+            expect(monitor.snapshot().strategy).toBe("least-connections");
         });
     });
 

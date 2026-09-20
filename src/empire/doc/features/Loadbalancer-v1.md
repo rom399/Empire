@@ -1,6 +1,6 @@
 # Empire — Load Balancer, Auto-Registration & 3D Visualizer: Design & Build Doc
 
-**Status:** Implemented
+**Status:** Implemented (round robin; least connections in section 8)
 **Scope:** Empire (native TypeScript webserver). Phase 23 in `PLAN.md`, v1 slice:
 round robin, backend self-registration, and a live three.js visualizer with
 per-backend drill-down.
@@ -166,7 +166,7 @@ because it awaits between check and set.)
 
 **How later slices fit:** weighted RR (`Backend.weight`, nginx's smooth
 weighted algorithm) as a new class; least connections reading `inFlight`
-from `LoadBalancerMonitor` (2.6); header routing as a strategy that
+from `LoadBalancerMonitor` (2.6) - built, see section 8; header routing as a strategy that
 delegates to inner strategies per backend group. Weight can also arrive via
 registration (Open Question 6).
 
@@ -772,7 +772,7 @@ itself up).
 - [x] Step 10 - three.js page, in layers (drill-down panel before constellation)
 - [x] Step 11 - `examples/12-load-balancer` + scripted walkthrough
 - [x] Step 12 - README, ARCHITECTURE, CHANGELOG, PLAN, exports
-- [ ] Follow-up slices: passive ejection → weighted RR → least connections → header routing
+- [ ] Follow-up slices: passive ejection → weighted RR → header routing (least connections: done, section 8)
 
 ## 7. Decisions & Deviations
 
@@ -851,3 +851,150 @@ position, that position was taken.
   (graceful fade), a killed backend (lease drain then collapse), a balancer
   restart (backends re-registered by themselves), dark mode and a phone-width
   viewport.
+
+## 8. Slice 2: Least connections
+
+**Status:** Implemented
+
+### 8.1 Context & goals
+
+The second strategy against the seam from 2.2. **Least connections** sends
+each request to the eligible backend with the fewest requests in flight, and
+rotates through ties - so an idle balancer behaves exactly like round robin
+and only diverges once backends actually differ in how long they hold work.
+
+It is the next easiest slice because everything it needs already exists:
+`LoadBalancerMonitor` tracks an accurate in-flight count per backend, and no
+registration protocol change is involved. It also has the clearest payoff on
+the dashboard - the example's backends have different latencies, so under
+round robin the slow ones pile up requests, and under least connections they
+visibly get fewer.
+
+"Connections" here means requests in flight, not TCP connections: this is a
+layer-7 proxy with a keep-alive pool to each backend, so sockets and requests
+are not the same thing, and requests are what a backend is actually busy with.
+
+**Non-goals:** weights (that is weighted least connections, a later slice),
+an error-rate penalty and slow start (see 8.4).
+
+### 8.2 Design
+
+```ts
+interface IInFlightSource {
+    inFlight(backendId: string): number;
+}
+
+class LeastConnectionsStrategy implements ILoadBalancingStrategy {
+    readonly name = "least-connections";
+    readonly inFlightSource: IInFlightSource;
+    constructor(inFlightSource: IInFlightSource);
+    select(backends: readonly Backend[]): Backend | undefined;
+}
+```
+
+**Selection.** Scan the list once, starting from a rotating position, and
+keep the first backend with the lowest in-flight count; then move the
+position to just past the choice. Starting the scan at a rotating position is
+the tie-break: with equal counts the first backend scanned wins, and the
+position advances, which is round robin. `select()` stays synchronous.
+
+**Why the counts are always current.** `forwardRequest` publishes `dispatched`
+synchronously, before its first `await`, and the middleware calls `select()`
+and `forwardRequest()` back to back with no `await` between them. So by the
+time the next request runs `select()`, the previous one is already counted.
+Two requests arriving in the same tick cannot both see a backend as idle.
+
+**The source is the monitor, structurally.** `IInFlightSource` lives in
+`strategy/` and `LoadBalancerMonitor` satisfies it without importing it, so
+`strategy/` still depends on nothing and `monitoring/` on nothing beside the
+root types. `LoadBalancerMonitor.inFlight(id)` is a single map lookup; it
+returns 0 for an unknown backend rather than throwing, since a strategy is
+handed a list the monitor may not have seen yet.
+
+**One monitor, enforced.** The counts only move if the strategy reads the
+same monitor the balancer reports to. Passing two different ones would not
+fail - it would quietly degrade to round robin, which is the worst kind of
+bug. So `ILoadBalancingStrategy` gains one *optional* member,
+`inFlightSource`, that a strategy sets when it reads live load, and
+`createLoadBalancerMiddleware` throws at construction unless that is the very
+monitor in its own options. The registry must publish to the same monitor as
+well (a registry the middleware builds itself for `backends:` already does).
+
+**Considered and rejected: a counter inside the strategy**, incremented in
+`select()`. It would need a completion hook the seam does not have, and would
+count requests the proxy later fails before dispatching.
+
+**Considered and rejected: reading `monitor.snapshot()` per request.** It
+builds every backend's full snapshot to read one number.
+
+**Considered and rejected: widening `select()` to take a stats argument.**
+That is the right move once a strategy needs more than one signal (Fastest
+does); for one number a narrow injected source is less machinery, and nothing
+about it blocks the wider seam later.
+
+### 8.3 Build steps
+
+Each step lands with its unit tests.
+
+1. **`LoadBalancerMonitor.inFlight(id)`** (via a `BackendStatsTracker`
+   getter). Tests: 0 for an unknown id; rises on `dispatched`; falls on each
+   of `completed` / `failed` / `aborted`; never negative; a removed backend
+   inside its grace window still reports its remaining in-flight.
+2. **`IInFlightSource` + `LeastConnectionsStrategy`.** Tests: picks the fewest;
+   ties rotate; all-equal counts match `RoundRobinStrategy` exactly; an
+   unknown backend counts as zero; a list that grows and shrinks between calls
+   stays in bounds; empty list returns `undefined`; a single backend; it reads
+   counts fresh on every call rather than caching them.
+3. **The seam guard.** Optional `ILoadBalancingStrategy.inFlightSource`, and
+   the check in `createLoadBalancerMiddleware`. Tests: rejects a strategy
+   reading a different monitor; rejects one when no monitor is configured;
+   accepts the matching one; strategies without the member are unaffected.
+4. **Integration.** Real backends, one fast and one slow, a steady stream of
+   requests through a real balancer: under least connections the slow backend
+   receives far fewer than half, under round robin exactly half.
+5. **Example.** `server.ts` takes the strategy as an argument
+   (`round-robin` by default, or `least-connections`), so the two can be
+   compared on the dashboard against the same backends.
+6. **Docs and exports.** README_DEVELOPMENT, ARCHITECTURE, CHANGELOG, PLAN,
+   `src/index.ts`.
+
+### 8.4 Known limits
+
+- **A backend that fails fast looks like the best one.** A refused connection
+  settles instantly, so a dead-but-not-yet-expired backend has the fewest
+  requests in flight and attracts more traffic, not less. Fixing that needs an
+  error-rate penalty, which belongs with passive ejection (Open Question 2).
+- **A new backend gets everything until it catches up.** It starts at zero
+  while the others hold work. Slow start is a later refinement.
+- **Long-lived responses count.** A backend holding streamed responses open
+  looks busy for as long as they last, which is the right answer for a
+  strategy whose whole point is "who is busy".
+
+### 8.5 Action checklist
+
+- [x] Step 1 - `LoadBalancerMonitor.inFlight(id)`
+- [x] Step 2 - `IInFlightSource`, `LeastConnectionsStrategy`
+- [x] Step 3 - `inFlightSource` on the seam, guard in the middleware
+- [x] Step 4 - integration test against real backends
+- [x] Step 5 - example takes a strategy argument
+- [x] Step 6 - docs and exports
+
+### 8.6 As built
+
+- The behaviour was measured, not assumed. The unit tests drive the strategy
+  with a fake source; the integration test sends a steady stream through a real
+  balancer to one fast and one slow backend, and least connections gives the
+  slow one far less than half where round robin gives it exactly half. A burst
+  of simultaneous requests still splits evenly, which is correct - every backend
+  is equally loaded as they arrive together.
+- Against the example's three backends (alpha 0 ms, beta 40, gamma 120 base
+  latency) at 30 requests a second, least connections sent gamma about a
+  quarter of the requests (103 of 436) where round robin sends a third. At 12 a
+  second the effect is real but modest (75 against 88 of about 260); the
+  difference grows with load, which is when a strategy like this earns its keep.
+- `createLoadBalancerMiddleware` now validates the strategy against the monitor
+  *before* it creates anything, so a refused configuration leaks no keep-alive
+  agent.
+- `doc/images/load-balancer-example.gif` shows the
+  example running under least connections: the ring under traffic, a drill-down
+  into gamma, and alpha deregistering and rejoining.

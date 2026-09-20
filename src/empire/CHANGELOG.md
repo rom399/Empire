@@ -29,6 +29,11 @@ experimental notice in [README.MD](README.MD).
   `createRouteHeaderMiddleware()`, which reports it as `X-Empire-Route`.
 - `examples/12-load-balancer`: a balancer, a configurable self-registering
   backend and a traffic generator.
+- `LeastConnectionsStrategy`: sends each request to the backend with the
+  fewest requests in flight, rotating through ties. It reads
+  `LoadBalancerMonitor.inFlight()`, and `createLoadBalancerMiddleware` refuses
+  to start unless the strategy and the balancer share one monitor. The example
+  takes it as an argument: `server.ts least-connections`.
 
 ## [0.1.3] - 2026-09-14
 

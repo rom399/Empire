@@ -96,7 +96,8 @@ empire/
 │   │   │   └── backendIdentity.ts  # Backend id pattern, URL normalising
 │   │   ├── strategy/               # How a backend is chosen
 │   │   │   ├── ILoadBalancingStrategy.ts # The seam
-│   │   │   └── RoundRobinStrategy.ts     # The default
+│   │   │   ├── RoundRobinStrategy.ts     # The default
+│   │   │   └── LeastConnectionsStrategy.ts # Fewest requests in flight; ties rotate (+ IInFlightSource)
 │   │   ├── proxy/                  # The request path
 │   │   │   ├── LoadBalancerMiddleware.ts # createLoadBalancerMiddleware() - the terminal middleware
 │   │   │   ├── forwardRequest.ts   # Streams one request to a backend; failure mapping; events
@@ -666,7 +667,7 @@ client -> [ dashboard | registration endpoint | load balancer ] -> backend
 |---|---|---|
 | `createLoadBalancerMiddleware` | `src/loadbalancing/proxy/LoadBalancerMiddleware.ts` | Terminal middleware: picks a backend via the strategy, calls `forwardRequest`, answers `503` when none is eligible. `dispose()` closes the keep-alive agent |
 | `forwardRequest` | `src/loadbalancing/proxy/forwardRequest.ts` | Streams a request to a backend and the response back, never buffering. Strips hop-by-hop headers both ways, adds `X-Forwarded-*`, maps failures to `502`/`504`, and emits exactly one terminal monitor event per request |
-| `ILoadBalancingStrategy`, `RoundRobinStrategy` | `src/loadbalancing/strategy/` | The seam for choosing a backend. Handed the eligible list on every call, since it changes at runtime |
+| `ILoadBalancingStrategy`, `RoundRobinStrategy`, `LeastConnectionsStrategy` | `src/loadbalancing/strategy/` | The seam for choosing a backend, handed the eligible list on every call since it changes at runtime. Least connections reads in-flight counts through the narrow `IInFlightSource`, which `LoadBalancerMonitor` satisfies structurally, and declares it as `inFlightSource` so the middleware can insist it is the balancer's own monitor |
 | `BackendRegistry` | `src/loadbalancing/backends/BackendRegistry.ts` | The eligible set. Registered backends hold a **lease** that expires unless renewed; static backends are pinned. An unref'd sweep timer removes lapsed leases |
 | `createBackendRegistrationEndpoint` | `src/loadbalancing/registration/BackendRegistrationEndpoint.ts` | `PUT`/`DELETE {path}/{id}` and `GET {path}`. Bearer token required, loopback only by default, body validated with `validate()` |
 | `LoadBalancerRegistration` | `src/loadbalancing/registration/LoadBalancerRegistration.ts` | The backend-side client: register, heartbeat at TTL/3, deregister on `stop()` |

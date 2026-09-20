@@ -566,7 +566,23 @@ loopback check reads the socket's real peer address - never
 **Strategies.** `ILoadBalancingStrategy.select(backends, ctx)` picks the
 backend for each request. It is handed the eligible list on every call
 rather than owning it, since the list changes as backends register and
-expire. `RoundRobinStrategy` is the default.
+expire. `RoundRobinStrategy` is the default; `LeastConnectionsStrategy` sends each
+request to the backend with the fewest requests in flight, rotating through ties so
+an idle balancer behaves like round robin:
+
+```ts
+const monitor = new LoadBalancerMonitor();
+const loadBalancer = createLoadBalancerMiddleware({
+    registry,
+    monitor,
+    strategy: new LeastConnectionsStrategy(monitor),   // reads the monitor's in-flight counts
+});
+```
+
+The strategy and the balancer must share that one monitor - the balancer throws at
+construction otherwise, since a strategy reading counts that never move would quietly
+behave like round robin. A backend that fails fast settles its requests instantly and
+so looks least loaded; that needs an error-rate penalty, which is not built yet.
 
 **Failures.** No eligible backend answers `503` (a normal state for a
 balancer started before its first backend); a connect error is `502`; no
@@ -613,7 +629,11 @@ createLoadBalancerDashboard(monitor, {
 If three.js or WebGL is unavailable the overlay still works on its own.
 
 See `examples/12-load-balancer` - a balancer, a configurable backend and a
-traffic generator, with a scripted walkthrough in its header comment.
+traffic generator, with a scripted walkthrough in its header comment. Start the
+balancer as `server.ts least-connections` to compare the two strategies against the
+same backends.
+
+![The example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](doc/images/load-balancer-example.gif)
 
 ## Authentication
 

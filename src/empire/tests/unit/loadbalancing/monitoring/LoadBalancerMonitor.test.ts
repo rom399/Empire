@@ -380,6 +380,75 @@ describe("LoadBalancerMonitor", () => {
         });
     });
 
+    describe("inFlight(id)", () => {
+
+        it("is zero for a backend the monitor has never heard of", () => {
+            expect(monitor.inFlight("ghost")).toBe(0);
+        });
+
+        it("is zero for a known backend that has been sent nothing", () => {
+            expect(monitor.inFlight("alpha")).toBe(0);
+        });
+
+        it("rises with each dispatch", () => {
+            monitor.publish({ type: "dispatched", requestId: "r1", backendId: "alpha", method: "GET", path: "/", at: clock });
+            monitor.publish({ type: "dispatched", requestId: "r2", backendId: "alpha", method: "GET", path: "/", at: clock });
+
+            expect(monitor.inFlight("alpha")).toBe(2);
+        });
+
+        it.each(["completed", "failed", "aborted"] as const)("falls when a request %s", (outcome) => {
+            monitor.publish({ type: "dispatched", requestId: "r1", backendId: "alpha", method: "GET", path: "/", at: clock });
+            monitor.publish({ type: "dispatched", requestId: "r2", backendId: "alpha", method: "GET", path: "/", at: clock });
+
+            if (outcome === "completed") {
+                monitor.publish({ type: "completed", requestId: "r1", backendId: "alpha", status: 200, durationMs: 5, at: clock });
+            } else if (outcome === "failed") {
+                monitor.publish({ type: "failed", requestId: "r1", backendId: "alpha", phase: "connect", at: clock });
+            } else {
+                monitor.publish({ type: "aborted", requestId: "r1", backendId: "alpha", at: clock });
+            }
+
+            expect(monitor.inFlight("alpha")).toBe(1);
+        });
+
+        it("counts each backend separately", () => {
+            monitor.publish({ type: "backendAdded", backend: { id: "beta", url: "http://b:1", source: "static" }, at: clock });
+            monitor.publish({ type: "dispatched", requestId: "r1", backendId: "alpha", method: "GET", path: "/", at: clock });
+
+            expect(monitor.inFlight("alpha")).toBe(1);
+            expect(monitor.inFlight("beta")).toBe(0);
+        });
+
+        it("never goes negative when a terminal event arrives with no dispatch", () => {
+            monitor.publish({ type: "completed", requestId: "orphan", backendId: "alpha", status: 200, durationMs: 1, at: clock });
+
+            expect(monitor.inFlight("alpha")).toBe(0);
+        });
+
+        it("still reports what a removed backend has in flight, inside the grace window", () => {
+            monitor.publish({ type: "dispatched", requestId: "r1", backendId: "alpha", method: "GET", path: "/", at: clock });
+            monitor.publish({ type: "backendRemoved", backendId: "alpha", reason: "deregistered", at: clock });
+
+            expect(monitor.inFlight("alpha")).toBe(1);
+        });
+
+        it("is zero again once a removed backend has been dropped", () => {
+            monitor.publish({ type: "dispatched", requestId: "r1", backendId: "alpha", method: "GET", path: "/", at: clock });
+            monitor.publish({ type: "backendRemoved", backendId: "alpha", reason: "expired", at: clock });
+            clock += GRACE_MS + 1;
+            monitor.snapshot();
+
+            expect(monitor.inFlight("alpha")).toBe(0);
+        });
+
+        it("matches the in-flight figure in the snapshot", () => {
+            monitor.publish({ type: "dispatched", requestId: "r1", backendId: "alpha", method: "GET", path: "/", at: clock });
+
+            expect(monitor.snapshot().backends[0].inFlight).toBe(monitor.inFlight("alpha"));
+        });
+    });
+
     describe("detail", () => {
 
         it("returns undefined for an unknown backend", () => {

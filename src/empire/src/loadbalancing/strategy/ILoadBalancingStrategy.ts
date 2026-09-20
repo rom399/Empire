@@ -1,5 +1,6 @@
 import { Context } from "../../http/Context";
 import { Backend } from "../Backend";
+import { IInFlightSource } from "./IInFlightSource";
 
 /**
  * Chooses which backend serves a request. Strategies are handed the
@@ -10,6 +11,15 @@ import { Backend } from "../Backend";
 export interface ILoadBalancingStrategy {
     /** Shown on the dashboard's hub node, e.g. "round-robin". */
     readonly name: string;
+
+    /**
+     * Set by a strategy that reads live load. The load balancer middleware
+     * requires it to be the very monitor the balancer reports to - a
+     * strategy reading a different one would see counts that never move and
+     * quietly degrade to round robin, which is worse than failing at startup.
+     * Leave it undefined for a strategy that needs no live numbers.
+     */
+    readonly inFlightSource?: IInFlightSource;
 
     /**
      * Picks a backend for this request. Synchronous by design - a strategy

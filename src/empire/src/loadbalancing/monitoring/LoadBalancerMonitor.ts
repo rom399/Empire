@@ -103,6 +103,16 @@ export class LoadBalancerMonitor {
     }
 
     /**
+     * How many requests are in flight to a backend right now - one map
+     * lookup, cheap enough for a strategy to call on every request. Zero for
+     * a backend the monitor has never heard of, or has already dropped.
+     * Satisfies IInFlightSource structurally.
+     */
+    public inFlight(backendId: string): number {
+        return this.backends.get(backendId)?.inFlightCount ?? 0;
+    }
+
+    /**
      * Route stats and recent calls for one backend, or undefined if it is
      * unknown - including one removed longer ago than the grace window.
      */

@@ -63,6 +63,11 @@ export class BackendStatsTracker {
         return this.removed?.at;
     }
 
+    /** Requests dispatched to this backend that have not yet finished, failed or been abandoned. */
+    public get inFlightCount(): number {
+        return this.inFlight;
+    }
+
     /** Records a heartbeat: the lease now lapses at `expiresAt`. */
     public renew(expiresAt: number): void {
         this.expiresAt = expiresAt;

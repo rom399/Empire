@@ -1564,7 +1564,8 @@ after all: only least connections needs live in-flight counts, and
   per-backend drill-down; `Context.route` and `createRouteHeaderMiddleware`
 * Weighted round robin (a new strategy; needs `Backend.weight`, possibly
   sent at registration)
-* Least connections (reads `inFlight` from `LoadBalancerMonitor`)
+* ~~Least connections~~ - `LeastConnectionsStrategy`, reads `inFlight` from
+  `LoadBalancerMonitor`
 * Layer 7 header-based routing
 * Passive ejection of a backend that heartbeats but fails every request
 * Retries for idempotent methods on connect failures

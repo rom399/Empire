@@ -54,6 +54,8 @@ export { ILoadBalancerMiddleware } from "./loadbalancing/proxy/ILoadBalancerMidd
 export { LoadBalancerOptions } from "./loadbalancing/proxy/LoadBalancerOptions";
 export { ILoadBalancingStrategy } from "./loadbalancing/strategy/ILoadBalancingStrategy";
 export { RoundRobinStrategy } from "./loadbalancing/strategy/RoundRobinStrategy";
+export { LeastConnectionsStrategy } from "./loadbalancing/strategy/LeastConnectionsStrategy";
+export { IInFlightSource } from "./loadbalancing/strategy/IInFlightSource";
 export { Backend } from "./loadbalancing/Backend";
 export { BackendInfo } from "./loadbalancing/BackendInfo";
 

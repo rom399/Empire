@@ -5,6 +5,7 @@ import { BackendRegistry } from "../backends/BackendRegistry";
 import { forwardRequest } from "./forwardRequest";
 import { ILoadBalancerMiddleware } from "./ILoadBalancerMiddleware";
 import { ILoadBalancingStrategy } from "../strategy/ILoadBalancingStrategy";
+import { LoadBalancerMonitor } from "../monitoring/LoadBalancerMonitor";
 import { LoadBalancerOptions } from "./LoadBalancerOptions";
 import { resolveRequestId } from "./resolveRequestId";
 import { RoundRobinStrategy } from "../strategy/RoundRobinStrategy";
@@ -38,9 +39,12 @@ export function createLoadBalancerMiddleware(options: LoadBalancerOptions): ILoa
         throw new Error(`Load balancer timeoutMs must be a positive number, received ${timeoutMs}`);
     }
 
-    const { registry, ownsRegistry } = resolveRegistry(options);
     const strategy: ILoadBalancingStrategy = options.strategy ?? new RoundRobinStrategy();
     const monitor = options.monitor;
+
+    assertStrategyReadsThisMonitor(strategy, monitor);
+
+    const { registry, ownsRegistry } = resolveRegistry(options);
     const agent = new http.Agent({ keepAlive: true });
     let requestCounter = 0;
 
@@ -70,6 +74,23 @@ export function createLoadBalancerMiddleware(options: LoadBalancerOptions): ILoa
             }
         },
     });
+}
+
+/**
+ * A strategy that reads live load (least connections) is only meaningful if
+ * it reads the counts this balancer produces. A different monitor, or none
+ * at all, would leave those counts frozen at zero and the strategy would
+ * silently behave like round robin - so it is refused at construction.
+ */
+function assertStrategyReadsThisMonitor(strategy: ILoadBalancingStrategy, monitor: LoadBalancerMonitor | undefined): void {
+    if (strategy.inFlightSource === undefined || strategy.inFlightSource === monitor) {
+        return;
+    }
+
+    throw new Error(
+        `The "${strategy.name}" strategy reads live load from a monitor, so the load balancer must be ` +
+        `given that same monitor: pass options.monitor as the very instance the strategy was built with.`
+    );
 }
 
 /**
