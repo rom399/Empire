@@ -11,7 +11,15 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 
 const REQUESTS = 30;
 const ARRIVAL_GAP_MS = 20;
-const SLOW_HOLD_MS = 300;
+
+/**
+ * How long the slow backend holds a request. Deliberately much longer than the
+ * whole stream takes to arrive (REQUESTS x ARRIVAL_GAP_MS = 600 ms), so the
+ * outcome does not hinge on timer precision: even if a loaded CI machine
+ * stretches every gap several times over, the slow backend is still busy with
+ * its first request for most of the stream.
+ */
+const SLOW_HOLD_MS = 1500;
 
 /**
  * The reason least connections exists, measured through a real balancer and
@@ -28,13 +36,20 @@ describe("least connections through a real balancer", () => {
         }
     });
 
-    async function serve(strategyFor: (monitor: LoadBalancerMonitor) => ILoadBalancingStrategy) {
+    /**
+     * Starts two backends behind a balancer. "fast" answers after `fastHoldMs`
+     * (instantly by default) and "slow" holds every request for `slowHoldMs`.
+     */
+    async function serve(
+        strategyFor: (monitor: LoadBalancerMonitor) => ILoadBalancingStrategy,
+        { fastHoldMs = 0, slowHoldMs = SLOW_HOLD_MS }: { fastHoldMs?: number; slowHoldMs?: number } = {}
+    ) {
         const monitor = new LoadBalancerMonitor({ logger: new TestLogger() });
         const registry = new BackendRegistry({ monitor });
         cleanups.push(() => registry.dispose());
 
-        const fast = await startHttpServer((_req, res) => { res.end("fast"); });
-        const slow = await startHttpServer((_req, res) => { setTimeout(() => res.end("slow"), SLOW_HOLD_MS); });
+        const fast = await startHttpServer((_req, res) => { setTimeout(() => res.end("fast"), fastHoldMs); });
+        const slow = await startHttpServer((_req, res) => { setTimeout(() => res.end("slow"), slowHoldMs); });
         cleanups.push(() => fast.stop());
         cleanups.push(() => slow.stop());
 
@@ -93,13 +108,20 @@ describe("least connections through a real balancer", () => {
         expect(monitor.inFlight("slow")).toBe(0);
     });
 
-    it("splits a burst evenly, since every backend is equally loaded as the requests arrive together", async () => {
-        const { server } = await serve((monitor) => new LeastConnectionsStrategy(monitor));
+    it("splits a burst evenly between backends that are equally slow", async () => {
+        const { server } = await serve(
+            (monitor) => new LeastConnectionsStrategy(monitor),
+            { fastHoldMs: SLOW_HOLD_MS, slowHoldMs: SLOW_HOLD_MS }
+        );
 
+        // All 20 arrive while every earlier one is still being held, so each backend's count climbs together.
         const answers = await Promise.all(
             Array.from({ length: 20 }, () => fetch(server.url).then((response) => response.text()))
         );
+        const first = answers.filter((name) => name === "fast").length;
+        const second = answers.filter((name) => name === "slow").length;
 
-        expect(answers.filter((name) => name === "slow")).toHaveLength(10);
+        expect(first + second).toBe(20);
+        expect(Math.abs(first - second)).toBeLessThanOrEqual(2);
     });
 });

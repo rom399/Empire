@@ -985,8 +985,15 @@ Each step lands with its unit tests.
   with a fake source; the integration test sends a steady stream through a real
   balancer to one fast and one slow backend, and least connections gives the
   slow one far less than half where round robin gives it exactly half. A burst
-  of simultaneous requests still splits evenly, which is correct - every backend
-  is equally loaded as they arrive together.
+  splits evenly only between backends that hold requests longer than the burst
+  takes to arrive, since only then does every backend's count climb together. A
+  burst sent to a fast and a slow backend has no fixed split: the fast one is
+  idle again as soon as it replies, so how many requests it takes depends on how
+  the arrivals interleave with its replies. A first version of the integration
+  test asserted an even 10/10 for exactly that case, passed locally on timing
+  luck, and failed on CI with 2 slow; it now bursts at two equally slow
+  backends, and the steady-stream tests hold the slow backend for 1500 ms so
+  they do not depend on timer precision either.
 - Against the example's three backends (alpha 0 ms, beta 40, gamma 120 base
   latency) at 30 requests a second, least connections sent gamma about a
   quarter of the requests (103 of 436) where round robin sends a third. At 12 a
