@@ -892,6 +892,32 @@ Shared fixtures live in `tests/fixtures/`: `MockHttp.ts` (minimal
 `TestLogger.ts` (an in-memory `ILogger` for asserting on what was
 logged, without polluting test output).
 
+### Verify and lint
+
+Two more commands, both run from `src/empire`, complete the picture:
+
+```bash
+npm run verify
+```
+
+Runs the full gate CI runs, in order, stopping at the first failure:
+`tsc --noEmit` (typechecks `src/`, `examples/` and `scripts/`), the whole
+Vitest suite, then `scripts/run-examples.ts`, which starts every app in
+`examples/`, confirms it answers a real HTTP request, and shuts it down.
+Run it before opening a pull request. The example smoke test binds ports
+8001-8012, so stop any example you have running first.
+
+```bash
+npm run lint
+```
+
+Runs [oxlint](https://oxc.rs) with type-aware rules, configured in
+`.oxlintrc.json`. It prints nothing beyond the npm header when the code is
+clean. `verify` does not include it, so run both. A finding that is a
+confirmed false positive is suppressed with an
+`// oxlint-disable-next-line <rule> -- <reason>` comment that says why,
+not silently ignored - `tests/fixtures/http/MockHttp.ts` shows the pattern.
+
 ## Project Structure
 
 ```text
