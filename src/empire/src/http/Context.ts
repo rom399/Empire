@@ -18,6 +18,16 @@ export class Context {
     public params: Record<string, string>;
 
     /**
+     * The route pattern the Router matched for this request, exactly as it
+     * was registered (e.g. "/users/:id"), as opposed to the concrete path
+     * that was requested ("/users/42"). Set by Router once it dispatches;
+     * undefined before routing has run, and for requests that matched no
+     * route - a 404, or the SPA fallback. This is what lets per-route
+     * statistics group /users/1 and /users/2 as one endpoint.
+     */
+    public route?: string;
+
+    /**
      * A per-request bag for middleware to attach data to for downstream
      * middleware and route handlers to read, e.g. an authenticated user
      * resolved by an auth middleware. Untyped by design, since Context

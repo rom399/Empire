@@ -51,7 +51,9 @@ empire/
 │   │   │                           # doc/features/CORS.md for the full design
 │   │   ├── CorsPolicy.ts           # One { match, options } entry in a multi-policy CorsConfig
 │   │   ├── CorsConfig.ts           # CorsOptions | { policies, fallback? }
-│   │   └── CorsMiddleware.ts       # createCorsMiddleware() — origin/preflight/credentials/Vary
+│   │   ├── CorsMiddleware.ts       # createCorsMiddleware() — origin/preflight/credentials/Vary
+│   │   └── RouteHeaderMiddleware.ts # createRouteHeaderMiddleware() — X-Empire-Route, the matched
+│   │                               # route template, for a load balancer in front of this app
 │   ├── errors/
 │   │   ├── HttpError.ts            # Base HTTP error class
 │   │   ├── HttpErrorOptions.ts     # { code?, retryable? } accepted by HttpError's constructor
@@ -85,6 +87,36 @@ empire/
 │   │   ├── validate.ts             # Wraps a handler with body/query/params validation
 │   │   ├── ValidationSchemas.ts    # { body?, query?, params? } schemas accepted by validate()
 │   │   └── Validated.ts            # { body, query, params } passed to the wrapped handler
+│   ├── loadbalancing/              # Layer-7 load balancer (Phase 23) — see
+│   │   │                           # doc/features/Loadbalancer-v1.md for the full design
+│   │   ├── Backend.ts, BackendInfo.ts # What a backend is - shared by everything below
+│   │   ├── isLoopbackAddress.ts    # Peer-address check shared by registration/ and dashboard/
+│   │   ├── backends/               # Who is eligible
+│   │   │   ├── BackendRegistry.ts  # Leases, static pins, expiry sweep (+ BackendRegistryOptions)
+│   │   │   └── backendIdentity.ts  # Backend id pattern, URL normalising
+│   │   ├── strategy/               # How a backend is chosen
+│   │   │   ├── ILoadBalancingStrategy.ts # The seam
+│   │   │   └── RoundRobinStrategy.ts     # The default
+│   │   ├── proxy/                  # The request path
+│   │   │   ├── LoadBalancerMiddleware.ts # createLoadBalancerMiddleware() - the terminal middleware
+│   │   │   ├── forwardRequest.ts   # Streams one request to a backend; failure mapping; events
+│   │   │   ├── hopByHopHeaders.ts  # stripHopByHopHeaders() - RFC 9110 §7.6.1, both directions
+│   │   │   └── ...                 # ILoadBalancerMiddleware, LoadBalancerOptions,
+│   │   │                           # ForwardRequestOptions, resolveRequestId
+│   │   ├── registration/           # Backends announcing themselves
+│   │   │   ├── BackendRegistrationEndpoint.ts # PUT/DELETE/GET, token + loopback guard (balancer side)
+│   │   │   ├── LoadBalancerRegistration.ts    # register, heartbeat, deregister (backend side)
+│   │   │   └── ...                 # their options types, LoadBalancerRegistrationError
+│   │   ├── monitoring/             # Events and the numbers derived from them
+│   │   │   ├── LoadBalancerMonitor.ts # Typed event source + bounded per-backend/per-route stats
+│   │   │   ├── LatencyHistogram.ts, BackendStatsTracker.ts, RouteStatsTracker.ts
+│   │   │   ├── normalizePath.ts    # Guesses a route template when the backend reports none
+│   │   │   └── ...                 # LoadBalancerEvent and the snapshot/detail types
+│   │   └── dashboard/              # Serving the visualiser
+│   │       ├── LoadBalancerDashboard.ts # Page, SSE stream, backend detail JSON, local three.js
+│   │       ├── DashboardSseClient.ts    # One tab's stream: drops request events, never topology ones
+│   │       └── page/               # The client as one HTML string
+│   │           └── dashboardPage.ts # (+ dashboardStyles, dashboardOverlayScript, dashboardSceneScript)
 │   ├── types.ts                    # Middleware, RouteHandler types
 │   ├── index.ts                    # Public barrel export - what "empire-ts" resolves to; omits
 │   │                                # internals (Router, RouteMatcher, StaticFileHandler, MimeTypes,
@@ -133,8 +165,10 @@ empire/
 │   │                                # scoped service calling a real HTTP endpoint via ctx.services
 │   ├── 10-validation/              # validate() wired into real routes — body, query
 │   │                                # (with coercion), and route param validation
-│   └── 11-cors/                    # createCorsMiddleware() — allowed vs. disallowed origin,
-│                                    # a preflight with credentials, a stricter multi-policy
+│   ├── 11-cors/                    # createCorsMiddleware() — allowed vs. disallowed origin,
+│   │                                # a preflight with credentials, a stricter multi-policy
+│   └── 12-load-balancer/           # server.ts (balancer + dashboard), backend.ts (a self-registering
+│                                    # backend), traffic.ts (request generator); not mirrored in package-example
 │
 ├── package-example/                # For people who just want to use the empire-ts npm package -
 │   │                                # imports "empire-ts", installed from a real `npm pack`
@@ -164,8 +198,10 @@ empire/
 │       │                           # graceful shutdown, decisions log
 │       ├── VALIDATION.md           # Full validation design: the Zod dependency decision,
 │       │                           # validate() wrapper, ValidationError, decisions log
-│       └── CORS.md                 # Full CORS design: preflight vs. Router's existing OPTIONS
-│                                    # handling, credentials/wildcard guard, multi-policy, decisions log
+│       ├── CORS.md                 # Full CORS design: preflight vs. Router's existing OPTIONS
+│       │                            # handling, credentials/wildcard guard, multi-policy, decisions log
+│       └── Loadbalancer-v1.md      # Full load balancer design: leases, strategy seam, streaming
+│                                    # proxy, route templates, the 3D dashboard, decisions log
 │
 ├── scripts/
 │   └── run-examples.ts             # Smoke-tests every examples/ app — run via `npm run examples`,
@@ -354,6 +390,7 @@ added in Phase 10 (DI-6) as a `Resolver` backed by a per-request
 | `query` | `URLSearchParams` | Parsed query parameters |
 | `headers` | `IncomingHttpHeaders` | Incoming request headers |
 | `params` | `Record<string, string>` | Route parameters from `:id` segments |
+| `route` | `string` \| `undefined` | Post-v1 addition (Phase 23). The route *pattern* `Router` matched (`/users/:id`), as opposed to the concrete path (`/users/42`). Set by `Router` on dispatch; `undefined` before routing, and for a 404, 405, automatic `OPTIONS`, or the SPA fallback. Also the first piece of Phase 21's per-route statistics |
 | `state` | `Record<string, unknown>` | Post-v1 addition. Per-request bag for middleware to attach data (e.g. an authenticated user) for downstream middleware and route handlers to read. Untyped by design - reading a value back requires narrowing, not casting with `as` |
 | `services` | `Resolver` \| `undefined` | Post-v1 addition (Phase 10, DI-6). Resolves dependencies registered via `EmpireOptions.services`, backed by a per-request `ServiceScope` that Empire creates and disposes automatically once the response ends. `undefined` when the app was built without `EmpireOptions.services` — dependency injection is entirely opt-in |
 | `ipAddress` | `string` | Client IP — handles `x-forwarded-for` and IPv6 |
@@ -605,7 +642,52 @@ itself use this signature.
 | File | Export | Behaviour |
 |------|--------|-----------|
 | `src/middleware/LoggerMiddleware.ts` | `createLoggerMiddleware(logger)` | Returns a middleware that logs `METHOD /path` through the given `ILogger` |
+| `src/middleware/RouteHeaderMiddleware.ts` | `createRouteHeaderMiddleware()` | Opt-in, backend-side. Adds `X-Empire-Route: <template>` to responses whose request matched a route, by wrapping `res.writeHead` (the route is only known after `Router` runs, i.e. after `next()`). Exposes route structure, so only enable it on backends a load balancer alone talks to |
 | `src/middleware/CorsMiddleware.ts` | `createCorsMiddleware(config)` | Returns a middleware handling CORS: origin allowlisting, preflight short-circuit, credentials, `allowedHeaders`/`exposedHeaders`, `Vary: Origin`, and optional per-path policies — full design in `doc/features/CORS.md` |
+
+---
+
+## Load Balancer
+
+A small layer-7 reverse proxy - a learning and local-development tool,
+not a production edge. Everything is a plain middleware or class
+registered through the existing `app.use()`; `Empire.ts` did not change.
+Full design: `doc/features/Loadbalancer-v1.md`.
+
+```
+client -> [ dashboard | registration endpoint | load balancer ] -> backend
+                              |                     |
+                        BackendRegistry  <-- select() --  ILoadBalancingStrategy
+                              |
+                        LoadBalancerMonitor --> DashboardSseClient --> browser (three.js)
+```
+
+| Piece | File | Role |
+|---|---|---|
+| `createLoadBalancerMiddleware` | `src/loadbalancing/proxy/LoadBalancerMiddleware.ts` | Terminal middleware: picks a backend via the strategy, calls `forwardRequest`, answers `503` when none is eligible. `dispose()` closes the keep-alive agent |
+| `forwardRequest` | `src/loadbalancing/proxy/forwardRequest.ts` | Streams a request to a backend and the response back, never buffering. Strips hop-by-hop headers both ways, adds `X-Forwarded-*`, maps failures to `502`/`504`, and emits exactly one terminal monitor event per request |
+| `ILoadBalancingStrategy`, `RoundRobinStrategy` | `src/loadbalancing/strategy/` | The seam for choosing a backend. Handed the eligible list on every call, since it changes at runtime |
+| `BackendRegistry` | `src/loadbalancing/backends/BackendRegistry.ts` | The eligible set. Registered backends hold a **lease** that expires unless renewed; static backends are pinned. An unref'd sweep timer removes lapsed leases |
+| `createBackendRegistrationEndpoint` | `src/loadbalancing/registration/BackendRegistrationEndpoint.ts` | `PUT`/`DELETE {path}/{id}` and `GET {path}`. Bearer token required, loopback only by default, body validated with `validate()` |
+| `LoadBalancerRegistration` | `src/loadbalancing/registration/LoadBalancerRegistration.ts` | The backend-side client: register, heartbeat at TTL/3, deregister on `stop()` |
+| `LoadBalancerMonitor` | `src/loadbalancing/monitoring/LoadBalancerMonitor.ts` | Typed event source. Keeps bounded per-backend counters, per-route latency histograms and a ring buffer of recent calls |
+| `createLoadBalancerDashboard` | `src/loadbalancing/dashboard/LoadBalancerDashboard.ts` | Serves the page, the SSE stream, per-backend JSON detail, and optionally a local three.js |
+| `DashboardSseClient` | `src/loadbalancing/dashboard/DashboardSseClient.ts` | One tab's end of the stream. Lossy for request events under backpressure, lossless for topology events |
+| `renderDashboardPage` | `src/loadbalancing/dashboard/page/dashboardPage.ts` | The whole client as one HTML string - overlay script, three.js scene script, styles |
+| `createRouteHeaderMiddleware` | `src/middleware/RouteHeaderMiddleware.ts` | Backend-side: reports the matched route template as `X-Empire-Route` |
+
+The folders under `src/loadbalancing/` follow the concerns above and import one way only:
+`backends`, `proxy`, `registration` and `dashboard` sit on top of `monitoring` and `strategy`,
+and everything sits on the shared `Backend`/`BackendInfo` types at the folder root. `proxy` and
+`dashboard` never import each other, and `monitoring` imports nothing from its siblings.
+
+Two decisions worth knowing about. **A registration is a lease, not a
+membership**: registering and renewing are the same `PUT`, so a balancer
+that restarts and forgets everything is repopulated by the next heartbeat,
+and a crashed backend needs no health probe to be noticed. **The bounds are
+load-bearing**: the monitor keeps at most 50 route keys per backend (the
+rest fold into `(other)`), fixed-size histograms, and a 200-entry call
+buffer, so memory is constant however much traffic flows.
 
 ---
 
@@ -747,10 +829,12 @@ Planned build order after CORS (version 0.17.0 above), tracked as
 4. **MVC pattern** (controllers, actions, model binding) - Phase 22,
    expands the existing Phase 14 Controllers stub; open question on
    server-rendered views vs. API-only; not yet designed
-5. **Simple load balancer** (round robin, weighted round robin, least
-   connections, Layer 7 header-based routing) - Phase 23, explicitly a
-   learning/local-dev feature, not production-grade; depends on Phase 21
-   for live per-backend metrics
+5. **Simple load balancer** - Phase 23, explicitly a learning/local-dev
+   feature, not production-grade. The v1 slice is built (round robin,
+   self-registering backends, the 3D dashboard - see the Load Balancer
+   section above); weighted round robin, least connections and Layer 7
+   header-based routing follow as new strategies against the same seam,
+   with least connections needing live in-flight counts
 
 Both design docs referenced above (items 1 and 2) do not exist in this
 repository as of this writing - the paths shown here use

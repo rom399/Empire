@@ -27,6 +27,9 @@ The goal of the project is to understand how modern web frameworks such as Expre
   the one deliberate exception to Empire's zero-runtime-dependency rule
 * CORS support via `createCorsMiddleware()` - origin/method/header
   allowlisting, preflight handling, credentials, and per-path policies
+* A small layer-7 load balancer (round robin, backends that register
+  themselves and hold a lease, a live three.js dashboard with per-backend
+  drill-down) - a learning and local-development tool, not a production edge
 * Centralized error handling built around `HttpError`
 * Configurable request body size limit
 * Pluggable logging abstraction (`ILogger`), with a built-in console logger
@@ -483,6 +486,135 @@ See `examples/11-cors` for a runnable version covering an allowed and a
 disallowed origin, a preflight with custom headers, credentials, and the
 multi-policy form together.
 
+## Load Balancer
+
+A small layer-7 reverse proxy, built from the same pieces as everything
+else - plain middleware registered through `app.use()`, nothing added to
+`Empire.ts` (see [`doc/features/Loadbalancer-v1.md`](doc/features/Loadbalancer-v1.md)
+for the full design). **It is a learning and local-development tool, not a
+production edge:** no TLS, no HTTP/2, no WebSocket upgrades, no retries, no
+active health checks.
+
+Backends register themselves. A backend announces itself on startup, keeps
+a *lease* alive with heartbeats, and deregisters on shutdown; one that
+crashes just stops renewing and drops out of rotation after one lease TTL.
+Nothing on the balancer lists backends, and adding or killing one needs no
+restart.
+
+The balancer app:
+
+```ts
+const monitor = new LoadBalancerMonitor();
+const registry = new BackendRegistry({ leaseTtlMs: 15_000, monitor });
+
+const dashboard = createLoadBalancerDashboard(monitor, { path: "/_lb" });
+const loadBalancer = createLoadBalancerMiddleware({ registry, monitor });
+
+app.use(dashboard);
+app.use(createBackendRegistrationEndpoint(registry, {
+    path: "/_lb/registry",
+    token: process.env.EMPIRE_LB_TOKEN,
+}));
+app.use(loadBalancer);   // terminal - it never calls next()
+```
+
+A backend app:
+
+```ts
+app.use(createRouteHeaderMiddleware());   // optional - see "Route templates" below
+
+await app.start();
+const registration = new LoadBalancerRegistration({
+    registryUrl: "http://127.0.0.1:5000/_lb/registry",
+    id: "alpha",
+    url: "http://127.0.0.1:5001",
+    token: process.env.EMPIRE_LB_TOKEN,
+});
+await registration.start();   // registers, then heartbeats in the background
+
+// on shutdown - in this order
+await registration.stop();    // deregister first ...
+await app.stop();             // ... then stop serving
+```
+
+**Ordering rules** - several, and they matter:
+
+* Everything the balancer app answers itself (the dashboard, the
+  registration endpoint, a health route) must be registered *before* the
+  load balancer middleware, which is terminal.
+* The load balancer must run before any middleware that reads the request
+  body. The body is streamed through to the backend, never buffered; if it
+  was already consumed the request is refused with a `500`.
+* A backend serves first, *then* registers; on shutdown it deregisters
+  *first*, *then* stops serving. Removing a backend only affects future
+  selection, so deregistering before stopping is what lets requests already
+  in flight on it finish (graceful draining).
+* Call `dispose()` on the load balancer and the dashboard, and on the
+  registry, from your shutdown handler. An open dashboard tab is a stream
+  that never finishes by itself.
+
+**Security defaults.** Whoever can register a backend can steer the
+balancer's traffic, so registration is locked down: a bearer `token` is
+required (compared in constant time; omitting it throws at startup unless
+you pass `allowUnauthenticated: true`), and only loopback clients are
+served unless you pass `allowRemote: true`. The dashboard exposes backend
+URLs and request paths, so it is loopback-only unless `allowRemote`. The
+loopback check reads the socket's real peer address - never
+`X-Forwarded-For`, which a client controls. Setting `allowRemote` *and*
+`allowUnauthenticated` together builds an open relay; don't.
+
+**Strategies.** `ILoadBalancingStrategy.select(backends, ctx)` picks the
+backend for each request. It is handed the eligible list on every call
+rather than owning it, since the list changes as backends register and
+expire. `RoundRobinStrategy` is the default.
+
+**Failures.** No eligible backend answers `503` (a normal state for a
+balancer started before its first backend); a connect error is `502`; no
+response headers within `timeoutMs` is `504` (the time to first headers,
+not total duration, so long streamed responses are not cut off); a backend
+dying mid-body destroys the client connection; a client disconnecting
+destroys the upstream request. All of it is reported to the monitor.
+
+**Route templates.** The balancer only sees raw paths, but the backend's
+`Router` knows the pattern it matched. `ctx.route` holds it (`/users/:id`,
+not `/users/42`; `undefined` for a 404 or the SPA fallback), and
+`createRouteHeaderMiddleware()` sends it as `X-Empire-Route`, which the
+balancer reads and strips before responding to the client. Without it the
+dashboard falls back to guessing (digits, UUIDs, long hex and ULIDs become
+`:id`) and marks guessed routes with `~`. The header exposes your route
+structure, so only enable it on backends that only the balancer talks to.
+Query strings are dropped from everything the dashboard shows unless you
+pass `includeQueryString: true`.
+
+**The dashboard** at `/_lb` is a self-contained page - a three.js scene
+plus a plain-DOM overlay - fed by a Server-Sent Events stream. The balancer
+is a hub, backends sit on a ring around it (so round robin reads as a sweep
+around the circle), and every request is a particle flying from the hub to
+the backend that got it. A backend's lease is an arc that drains between
+heartbeats; a clean shutdown fades a node out, a crash collapses it.
+Clicking a node (or a table row, or `#backend=alpha` in the URL) drills in:
+the camera flies to it, everything else dims, and it unfolds into one
+satellite per route - sized by request count, coloured by error rate, with a
+stalk as long as the p95 latency - beside a route table and a live,
+pausable, filterable call tail.
+
+three.js is loaded **in the browser only**; the package never imports it
+and `package.json` is unchanged. By default the page pulls a pinned version
+from the jsDelivr CDN (needs internet). To work offline, install `three` as
+your own dev dependency and pass its directory:
+
+```ts
+createLoadBalancerDashboard(monitor, {
+    path: "/_lb",
+    threeLocalPath: path.dirname(require.resolve("three/package.json")),
+});
+```
+
+If three.js or WebGL is unavailable the overlay still works on its own.
+
+See `examples/12-load-balancer` - a balancer, a configurable backend and a
+traffic generator, with a scripted walkthrough in its header comment.
+
 ## Authentication
 
 Empire does not ship authentication middleware. The framework owns the
@@ -672,6 +804,7 @@ npx tsx examples/02-routing/server.ts
 | `09-dependency-injection` | 8009 | The DI container wired into a real app: a singleton in-memory repository backing three `/records` routes, and a scoped service that calls an "upstream" API over a real HTTP request via `ctx.services` |
 | `10-validation` | 8010 | `validate()` covering body, query (with `z.coerce` for the all-strings-off-the-URL gotcha), and route param validation, each with a passing and a failing request |
 | `11-cors` | 8011 | `createCorsMiddleware()` covering an allowed vs. disallowed origin, a preflight with custom headers and credentials, and a stricter multi-policy for `/admin` |
+| `12-load-balancer` | 8012 | A load balancer with a live 3D dashboard at `/_lb`. `server.ts` is the balancer; `backend.ts <id> <port> [latencyMs]` starts a self-registering backend and `traffic.ts` generates requests, with a scripted walkthrough in `server.ts`'s header comment |
 
 ## Testing
 
@@ -707,6 +840,8 @@ aborted download - is exactly what a mock gets wrong.
 | `createCorsMiddleware` | `tests/unit/middleware/CorsMiddleware.test.ts` |
 | `ServiceCollection`, `ServiceProvider`, `ServiceScope`, `createToken` | `tests/unit/di/ServiceCollection.test.ts`, `tests/unit/di/ServiceProvider.test.ts`, `tests/unit/di/ServiceScope.test.ts`, `tests/unit/di/ServiceToken.test.ts` |
 | `validate` | `tests/unit/validation/validate.test.ts` |
+| `createRouteHeaderMiddleware`, `Context.route` | `tests/unit/middleware/RouteHeaderMiddleware.test.ts`, `tests/unit/routing/RouterRouteTemplate.test.ts` |
+| Load balancer (`src/loadbalancing/`) | `tests/unit/loadbalancing/`, in the same sub-folders as `src/` - one file per class (`RoundRobinStrategy`, `BackendRegistry`, `LoadBalancerMonitor`, `forwardRequest`, `LoadBalancerMiddleware`, `LoadBalancerDashboard`, `DashboardSseClient`, and the rest), plus `dashboardPage.test.ts`, which syntax-checks the client script and its element ids since the browser half cannot run under Vitest |
 
 ### Integration tests
 
@@ -767,7 +902,7 @@ empire/
 │   ├── http/          Context, CookieOptions
 │   ├── routing/        Route, RouteMatch, RouteMatcher, Router
 │   ├── middleware/      LoggerMiddleware, CorsMiddleware, CorsOptions,
-│   │                     CorsPolicy, CorsConfig
+│   │                     CorsPolicy, CorsConfig, RouteHeaderMiddleware
 │   ├── static/          MimeTypes, StaticFileHandler and its option types
 │   ├── errors/          HttpError, BadRequestError, HttpErrorOptions,
 │   │                     ValidationError, ValidationIssue, sendErrorResponse
@@ -775,7 +910,12 @@ empire/
 │   ├── di/              ServiceCollection, ServiceProvider, ServiceScope,
 │   │                     ServiceToken, Lifetime, Disposable, and their
 │   │                     supporting types (Resolver, Factory, ServiceDescriptor)
-│   └── validation/      validate(), ValidationSchemas, Validated
+│   ├── validation/      validate(), ValidationSchemas, Validated
+│   └── loadbalancing/   The load balancer, in sub-folders: backends/ (registry),
+│                         strategy/, proxy/ (middleware, forwardRequest),
+│                         registration/ (endpoint and backend-side client),
+│                         monitoring/ (events, stats), dashboard/ (server, SSE,
+│                         and page/ - the three.js client)
 ├── examples/
 │   ├── 01-basic-server/
 │   ├── 02-routing/
@@ -787,7 +927,8 @@ empire/
 │   ├── 08-authentication/
 │   ├── 09-dependency-injection/
 │   ├── 10-validation/
-│   └── 11-cors/
+│   ├── 11-cors/
+│   └── 12-load-balancer/
 ├── tests/
 │   ├── unit/
 │   ├── integration/

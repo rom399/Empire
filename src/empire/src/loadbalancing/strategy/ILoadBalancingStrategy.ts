@@ -1,0 +1,22 @@
+import { Context } from "../../http/Context";
+import { Backend } from "../Backend";
+
+/**
+ * Chooses which backend serves a request. Strategies are handed the
+ * eligible list on every call rather than owning it - the list changes at
+ * runtime as backends register and expire, and the registry, not the
+ * strategy, decides who is eligible.
+ */
+export interface ILoadBalancingStrategy {
+    /** Shown on the dashboard's hub node, e.g. "round-robin". */
+    readonly name: string;
+
+    /**
+     * Picks a backend for this request. Synchronous by design - a strategy
+     * that awaited between reading its state and updating it would reopen
+     * exactly the race a single-threaded select() rules out. Receives ctx
+     * so a future header-based strategy can inspect the request without a
+     * signature change. Returns undefined only when nothing is eligible.
+     */
+    select(backends: readonly Backend[], ctx: Context): Backend | undefined;
+}

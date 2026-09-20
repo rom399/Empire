@@ -5,6 +5,31 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this
 package does not yet commit to strict semantic versioning - see the
 experimental notice in [README.MD](README.MD).
 
+## [Unreleased]
+
+### Added
+
+- A layer-7 load balancer - a learning and local-development tool, not a
+  production edge. `createLoadBalancerMiddleware()` proxies requests to
+  backends with streamed request and response bodies, round robin by
+  default behind the new `ILoadBalancingStrategy` seam; `BackendRegistry`
+  holds backends as leases that expire unless renewed, so a killed backend
+  drops out of rotation on its own.
+- Backends register themselves: `createBackendRegistrationEndpoint()`
+  (bearer token required, loopback only by default) and the backend-side
+  `LoadBalancerRegistration` client, which registers, heartbeats and
+  deregisters on `stop()`.
+- `createLoadBalancerDashboard()`: a live three.js dashboard - the balancer
+  as a hub, backends on a ring, each request a particle - with per-backend
+  drill-down into a route table, a live call tail and a route
+  constellation. Fed by Server-Sent Events from `LoadBalancerMonitor`.
+  three.js loads in the browser only; `empire-ts` still has one runtime
+  dependency.
+- `Context.route`: the route pattern `Router` matched (`/users/:id`), and
+  `createRouteHeaderMiddleware()`, which reports it as `X-Empire-Route`.
+- `examples/12-load-balancer`: a balancer, a configurable self-registering
+  backend and a traffic generator.
+
 ## [0.1.3] - 2026-09-14
 
 ### Fixed

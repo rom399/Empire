@@ -1,6 +1,6 @@
 # Empire — Load Balancer, Auto-Registration & 3D Visualizer: Design & Build Doc
 
-**Status:** Proposed
+**Status:** Implemented
 **Scope:** Empire (native TypeScript webserver). Phase 23 in `PLAN.md`, v1 slice:
 round robin, backend self-registration, and a live three.js visualizer with
 per-backend drill-down.
@@ -316,7 +316,7 @@ exists.
 
 ```ts
 type LoadBalancerEvent =
-    | { type: "backendAdded";   backend: BackendInfo; at: number }   // BackendInfo: id, url, source: "static" | "registered"
+    | { type: "backendAdded";   backend: BackendInfo; expiresAt?: number; at: number }   // BackendInfo: id, url, source: "static" | "registered"; expiresAt only for registered
     | { type: "backendRemoved"; backendId: string; reason: "deregistered" | "expired"; at: number }
     | { type: "leaseRenewed";   backendId: string; expiresAt: number; at: number }
     | { type: "dispatched";     requestId: string; backendId: string; method: string; path: string; at: number }
@@ -462,8 +462,8 @@ lets it be overridden:
 ```ts
 createLoadBalancerDashboard(monitor, {
     path: "/_lb",
-    three: { baseUrl: "/_lb/vendor/three/" },  // default: pinned CDN URL
-    threeLocalPath: require.resolve("three/build/three.module.js"), // optional: serve from your own node_modules
+    three: { baseUrl: "https://mirror.example/three/" },  // default: pinned jsDelivr URL
+    threeLocalPath: path.dirname(require.resolve("three/package.json")), // optional: serve your own node_modules/three
 });
 ```
 
@@ -593,7 +593,8 @@ Each step lands with its unit tests before the next starts.
 1. **Types.** `src/loadbalancing/`: `Backend.ts`, `BackendInfo.ts`,
    `LoadBalancerOptions.ts`, `ILoadBalancingStrategy.ts`,
    `LoadBalancerEvent.ts`, `LoadBalancerSnapshot.ts`. Options validated at
-   construction (fail fast at startup).
+   construction (fail fast at startup). As built these live in sub-folders -
+   see section 7.
 2. **`RoundRobinStrategy`.** Tests: cycles in order; wraps; single backend;
    empty → `undefined`; list growing and shrinking between calls stays in
    bounds and stays ±1 fair over a window.
@@ -642,8 +643,9 @@ Each step lands with its unit tests before the next starts.
     comes before the 3D expansion deliberately: it carries the actual
     information, and the constellation is the part to cut if time runs
     short.
-11. **Example `12-load-balancer/`.** `balancer.ts` (port 5000, dashboard at
-    `/_lb`), `backend.ts` taking id/port/latency from argv with a handful of
+11. **Example `12-load-balancer/`.** `server.ts` (the balancer - named that
+    because `scripts/run-examples.ts` discovers examples by it; port 8012,
+    dashboard at `/_lb`), `backend.ts` taking id/port/latency from argv with a handful of
     routes (a parameterized one, a slow one, one that 500s sometimes) and
     the route header middleware registered, and a
     `traffic.ts` generator. Scripted walkthrough in the example's comments:
@@ -756,18 +758,96 @@ itself up).
 
 ## 6. Action Checklist
 
-- [ ] Resolve Open Questions 1, 4, 5, 6, 7 and 9 before step 1
-- [ ] Step 1 - types + options validation
-- [ ] Step 2 - `RoundRobinStrategy`
-- [ ] Step 3 - `BackendRegistry` (leases, sweep)
-- [ ] Step 4 - registration endpoint (auth, loopback guard, validation)
-- [ ] Step 5 - `LoadBalancerRegistration` client
-- [ ] Step 6 - `forwardRequest` + hop-by-hop handling + route header read/strip
-- [ ] Step 6a - `Context.route`, `createRouteHeaderMiddleware`, `normalizePath`
-- [ ] Step 7 - `createLoadBalancerMiddleware`
-- [ ] Step 8 - `LoadBalancerMonitor`
-- [ ] Step 9 - dashboard SSE + vendor serving
-- [ ] Step 10 - three.js page, in layers (drill-down panel before constellation)
-- [ ] Step 11 - `examples/12-load-balancer` + scripted walkthrough
-- [ ] Step 12 - README, ARCHITECTURE, CHANGELOG, PLAN, exports
+- [x] Resolve Open Questions 1, 4, 5, 6, 7 and 9 before step 1
+- [x] Step 1 - types + options validation
+- [x] Step 2 - `RoundRobinStrategy`
+- [x] Step 3 - `BackendRegistry` (leases, sweep)
+- [x] Step 4 - registration endpoint (auth, loopback guard, validation)
+- [x] Step 5 - `LoadBalancerRegistration` client
+- [x] Step 6 - `forwardRequest` + hop-by-hop handling + route header read/strip
+- [x] Step 6a - `Context.route`, `createRouteHeaderMiddleware`, `normalizePath`
+- [x] Step 7 - `createLoadBalancerMiddleware`
+- [x] Step 8 - `LoadBalancerMonitor`
+- [x] Step 9 - dashboard SSE + vendor serving
+- [x] Step 10 - three.js page, in layers (drill-down panel before constellation)
+- [x] Step 11 - `examples/12-load-balancer` + scripted walkthrough
+- [x] Step 12 - README, ARCHITECTURE, CHANGELOG, PLAN, exports
 - [ ] Follow-up slices: passive ejection → weighted RR → least connections → header routing
+
+## 7. Decisions & Deviations
+
+Recorded as built, so this doc stays true to the code.
+
+**Open questions, as resolved.** Where the proposal already held a current
+position, that position was taken.
+
+1. **three.js delivery** - CDN import map by default, pinned to `0.170.0`
+   (`THREE_VERSION` in `LoadBalancerDashboard.ts`), with `threeLocalPath` to
+   serve a local install instead. The npm package is unchanged.
+4. **Default `leaseTtlMs`** - 15 seconds in the library, 5 seconds in the
+   example, so a killed backend leaves the ring quickly enough to watch.
+5. **Advertised URL** - trusted, since the token gates registration. It must
+   be a bare `http:` origin (no path, query or credentials): forwarding uses
+   the client's own request target, so anything more would be silently
+   ignored, and rejecting it is better than dropping it quietly.
+6. **Registration metadata** - the `PUT` body stays `{ url }`. `weight` and
+   `tags` arrive with the slices that use them.
+7. **Phase 21 vs 23** - the monitor stays narrow, and Phase 21 adapts to it
+   later. Phase 23's v1 slice turned out not to depend on Phase 21 at all.
+9. **Route header** - `Context.route` in core plus the opt-in
+   `createRouteHeaderMiddleware()` wrapping `writeHead`.
+2, 3, 10, 11 stay as proposed: out of v1.
+
+**Deviations from the text above.**
+
+- `backendAdded` carries an optional `expiresAt`, so the dashboard can draw a
+  new backend's lease arc without waiting for a `leaseRenewed`.
+- `threeLocalPath` is the *directory* of the `three` package rather than the
+  module file: the addons (`OrbitControls`, `CSS2DRenderer`) live under
+  `examples/jsm/`, outside `build/`, and the import map needs both.
+- The example's balancer is `server.ts`, on port 8012, backends from 8021 -
+  `scripts/run-examples.ts` discovers examples by that filename and the
+  `8000 + N` convention.
+- The example is **not** mirrored in `package-example/`. That project installs
+  a packed tarball built before these exports existed, and port 9012 is
+  already taken by `full-featured.ts`. Do it as part of the next publish.
+- `createLoadBalancerMiddleware()` and `createLoadBalancerDashboard()` return
+  callable objects with a `dispose()`, still plain middleware for `app.use()`.
+  The first closes its keep-alive agent; the second ends open event streams,
+  which would otherwise hold `Empire.stop()` until its timeout.
+- The proxy also strips `Proxy-Authenticate` / `Proxy-Authorization` (RFC 7235
+  hop-by-hop) and drops `Expect`, since Node has already answered
+  `100 Continue`. An outer proxy's `X-Forwarded-Host` / `-Proto` are preserved
+  rather than overwritten.
+- A request id stored in `ctx.state.requestId` is reused only if it matches the
+  same safe character set as backend ids, since it lands in headers, logs and
+  a web page.
+- The registry starts its sweep timer on the first registration, so a
+  registry of only static backends never schedules anything.
+- `LoadBalancerRegistrationError` carries the HTTP status, so a heartbeat can
+  tell a 401/409 (retrying will not help) from a 5xx.
+- 502, 503 and 504 flow through the normal error path, which logs each one as
+  an error with a stack trace. That is noisy while no backend is registered -
+  a normal state here - and is the thing `app.onError` should quiet when it
+  lands; the balancer does not special-case it.
+- `BackendRegistrationEndpoint.ts` imports `zod` directly for its `validate()`
+  schemas, as this doc's design specifies. That extends Zod beyond
+  `src/validation/`, where CLAUDE.md scopes it; still one runtime dependency.
+- **Layout.** `src/loadbalancing/` is split by concern rather than left flat:
+  `backends/` (registry), `strategy/`, `proxy/` (middleware, `forwardRequest`),
+  `registration/` (endpoint and the backend-side client), `monitoring/` (events,
+  stats), `dashboard/` (server, SSE) and `dashboard/page/` (the three.js client),
+  with `Backend`, `BackendInfo` and `isLoopbackAddress` at the root because
+  several folders share them. Imports run one way - `backends`, `proxy`,
+  `registration` and `dashboard` depend on `monitoring`, `strategy` and the root
+  types, never the reverse - so `monitoring` needed `BackendInfo` at the root
+  instead of inside `backends/`, which would have made the two folders import
+  each other. `tests/unit/loadbalancing/` mirrors the same sub-folders.
+- Verification: the client script cannot run under Vitest, so
+  `dashboardPage.test.ts` syntax-checks it (`node --check`) and asserts every
+  element id it looks up exists. The page itself was exercised by hand against
+  a real balancer, three backends and a traffic generator: ring and particles,
+  drill-down, filter, pause and route filter, `Esc`, a remote `DELETE`
+  (graceful fade), a killed backend (lease drain then collapse), a balancer
+  restart (backends re-registered by themselves), dark mode and a phone-width
+  viewport.
