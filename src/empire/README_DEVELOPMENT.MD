@@ -24,7 +24,8 @@ The goal of the project is to understand how modern web frameworks such as Expre
 * A dependency injection container - `addSingleton`/`addScoped`/`addTransient`,
   per-request scoping via `ctx.services`, disposal
 * Schema-based request validation (body, query, route params) via `validate()`,
-  the one deliberate exception to Empire's zero-runtime-dependency rule
+  accepting any Standard Schema validator (Zod, Valibot, ArkType, or your own) -
+  Empire itself keeps zero runtime dependencies
 * CORS support via `createCorsMiddleware()` - origin/method/header
   allowlisting, preflight handling, credentials, and per-path policies
 * A small layer-7 load balancer (round robin, backends that register
@@ -377,12 +378,24 @@ including the always-500 `/crash` route.
 ## Validation
 
 `validate()` wraps a route handler with schema-based validation of the
-request body, query string, and/or route params, using
-[Zod](https://zod.dev) - the one deliberate exception to Empire's
-zero-runtime-dependency rule (see
-[`doc/features/VALIDATION.md`](doc/features/VALIDATION.md) §2.1 for why).
+request body, query string, and/or route params, using any validator that
+implements [Standard Schema](https://standardschema.dev) - [Zod](https://zod.dev), Valibot, ArkType, or one
+you write by hand. Empire depends on none of them: you install the one you want
+(`npm install zod`), and Empire relies only on the small interface they all share
+(see [`doc/features/REMOVE_ZOD.md`](doc/features/REMOVE_ZOD.md) for the design).
 It wraps a handler the same way `createLoggerMiddleware(logger)` wraps a
-middleware, so it needs no changes to `Router` or `Context`:
+middleware, so it needs no changes to `Router` or `Context`.
+
+### Using Zod
+
+Empire's own repository contains no validation library - not even as a dev dependency - so
+add Zod to *your* project first:
+
+```bash
+npm install zod
+```
+
+Then import it and pass a schema to `validate()`. The examples in this section use Zod:
 
 ```ts
 import { z } from "zod";
@@ -432,6 +445,37 @@ app.get("/search", validate({ query: searchSchema })(async (ctx, { query }) => {
     ctx.json(results);
 }));
 ```
+
+### Bring your own validator
+
+Anything with a `~standard` property works, so a validator can be a few lines and no
+library at all. It returns either `{ value }` or `{ issues }`, and may be async:
+
+```ts
+import { validate, StandardSchemaV1 } from "./src/index";
+
+const pageQuery: StandardSchemaV1<unknown, { page: number }> = {
+    "~standard": {
+        version: 1,
+        vendor: "my-app",
+        validate(value) {
+            const page = Number((value as Record<string, unknown>).page ?? 1);
+
+            return Number.isInteger(page) && page >= 1
+                ? { value: { page } }
+                : { issues: [{ message: "must be a whole number of 1 or more", path: ["page"] }] };
+        },
+    },
+};
+
+app.get("/things", validate({ query: pageQuery })((ctx, { query }) => ctx.json({ page: query.page })));
+```
+
+Empire's own examples validate this way (see `examples/10-validation`), which is how the
+repository stays free of any validation library. A failure produces exactly the same `400`
+body as the Zod examples above, with the
+issue's path turned into `field` (`query.page`). A validator that *throws* instead of
+returning issues is treated as a bug and answers `500`.
 
 See `examples/10-validation` for a runnable version covering body, query
 (with coercion), and route param validation together.
@@ -540,6 +584,11 @@ await registration.start();   // registers, then heartbeats in the background
 await registration.stop();    // deregister first ...
 await app.stop();             // ... then stop serving
 ```
+
+The registration endpoint validates the id and the backend URL without any external
+library. A request with several problems - a bad id *and* a bad URL - gets one `400`
+whose `details` list all of them, so a misconfigured backend can fix everything in
+one go.
 
 ### Ordering rules
 

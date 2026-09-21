@@ -40,6 +40,9 @@ npm install             # installs the tarball referenced in package.json
 Either way, `import { Empire } from "empire-ts"` resolves the same way -
 there's nothing local-install-specific about the example code itself.
 
+`empire-ts` has no runtime dependencies. For request validation with Zod, see
+[Validation with Zod](#validation-with-zod-or-any-validator) below.
+
 ## Examples
 
 [`package-example/examples`](https://github.com/rom399/Empire/tree/main/src/empire/package-example/examples)
@@ -327,7 +330,7 @@ on GitHub, one folder per row in the table above.
 Not a mirror of a numbered example - a twelfth, combined showcase
 wiring several features together in one app through nothing but the
 public exports of `empire-ts`: a singleton repository via the DI
-container, logger and CORS middleware, Zod-based request validation,
+container, logger and CORS middleware, request body checking,
 and `HttpError` for a clean 404.
 
 ```bash
@@ -340,6 +343,52 @@ curl -X POST http://localhost:9012/users -H "Content-Type: application/json" -d 
 curl http://localhost:9012/users/1
 curl http://localhost:9012/users/999   # 404
 ```
+
+## Validation with Zod (or any validator)
+
+`empire-ts` has no runtime dependencies, and neither do its examples - it does not install a
+validation library for you. Its `validate()` wrapper accepts any validator that implements
+[Standard Schema](https://standardschema.dev), which [Zod](https://zod.dev) (3.24 and later, including 4.x), Valibot and ArkType
+all do. To use Zod:
+
+1. Install it next to Empire:
+
+   ```bash
+   npm install empire-ts zod
+   ```
+
+2. Import it and pass a schema to `validate()`:
+
+   ```ts
+   import { z } from "zod";
+   import { Empire, validate } from "empire-ts";
+
+   const app = new Empire({ host: "localhost", port: 3000 });
+
+   const createUserSchema = z.object({
+       name: z.string().min(1, "name is required"),
+       email: z.string().email("email must be a valid address"),
+   });
+
+   app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) => {
+       // body.name and body.email are validated and typed - no casts, no manual checks
+       ctx.status(201).json(body);
+   }));
+
+   await app.start();
+   ```
+
+3. Remember that query strings and route params always arrive as text, so a number needs
+   `z.coerce.number()` rather than `z.number()`:
+
+   ```ts
+   validate({ query: z.object({ page: z.coerce.number().int().min(1).default(1) }) })
+   ```
+
+A schema that fails answers `400` with `{ "error": "...", "details": [{ "field": "body.name", "message": "name is required" }] }`.
+Empire does not install, pin or test against Zod, Valibot or ArkType - they are named because they
+implement the standard. You can also write a validator by hand; see the
+[Validation section of README_DEVELOPMENT.MD](https://github.com/rom399/Empire/blob/main/src/empire/README_DEVELOPMENT.MD#validation).
 
 ## Load balancer (experimental)
 

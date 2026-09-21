@@ -3,9 +3,11 @@
 ## Overview
 
 Empire is a lightweight TypeScript HTTP web framework built from scratch on Node's
-built-in `http` module. Routing, middleware, the HTTP layer, and the DI container
-are all zero-dependency; `src/validation/` (Phase 11) is the one deliberate
-exception, depending on Zod - see `doc/features/VALIDATION.md` §2.1 for why.
+built-in `http` module. Routing, middleware, the HTTP layer, the DI container and the
+load balancer are all zero-dependency, and so is `src/validation/` (Phase 11): it
+accepts any Standard Schema validator (Zod, Valibot, ArkType or a hand-written one), so the
+validator is the application's own dependency, never Empire's - see
+`doc/features/REMOVE_ZOD.md` for the design and `doc/features/VALIDATION.md` for the original.
 The design is inspired by ASP.NET Core — middleware pipelines, dependency
 injection, strongly-typed context, and a clean separation of concerns.
 
@@ -85,8 +87,11 @@ empire/
 │   ├── validation/                 # Schema-based validation (Phase 11) — see
 │   │   │                           # doc/features/VALIDATION.md for the full design
 │   │   ├── validate.ts             # Wraps a handler with body/query/params validation
-│   │   ├── ValidationSchemas.ts    # { body?, query?, params? } schemas accepted by validate()
-│   │   └── Validated.ts            # { body, query, params } passed to the wrapped handler
+│   │   ├── ValidationSchemas.ts    # { body?, query?, params? } Standard Schema validators accepted by validate()
+│   │   ├── Validated.ts            # { body, query, params } passed to the wrapped handler
+│   │   ├── formatIssueField.ts     # Turns a validator's issue path into "body.user.tags.0"
+│   │   └── standard/               # StandardSchemaV1 and its supporting types - copied from the
+│   │                               # spec (standardschema.dev), so no package dependency is needed
 │   ├── loadbalancing/              # Layer-7 load balancer (Phase 23) — see
 │   │   │                           # doc/features/Loadbalancer-v1.md for the full design
 │   │   ├── Backend.ts, BackendInfo.ts # What a backend is - shared by everything below
@@ -106,6 +111,7 @@ empire/
 │   │   │                           # ForwardRequestOptions, resolveRequestId
 │   │   ├── registration/           # Backends announcing themselves
 │   │   │   ├── BackendRegistrationEndpoint.ts # PUT/DELETE/GET, token + loopback guard (balancer side)
+│   │   │   ├── validateRegistrationRequest.ts # Hand-written id/url validation; reports every problem at once
 │   │   │   ├── LoadBalancerRegistration.ts    # register, heartbeat, deregister (backend side)
 │   │   │   └── ...                 # their options types, LoadBalancerRegistrationError
 │   │   ├── monitoring/             # Events and the numbers derived from them
@@ -190,7 +196,7 @@ empire/
 │   │   ├── 10-validation/          # port 9010
 │   │   └── 11-cors/                # port 9011
 │   └── full-featured.ts            # port 9012 - bonus, not a mirror: DI + logger/CORS middleware +
-│                                    # Zod validation + HttpError combined in one app
+│                                    # request body checking + HttpError combined in one app
 │
 ├── doc/
 │   ├── ARCHITECTURE.md             # This file
@@ -199,6 +205,8 @@ empire/
 │       │                           # graceful shutdown, decisions log
 │       ├── VALIDATION.md           # Full validation design: the Zod dependency decision,
 │       │                           # validate() wrapper, ValidationError, decisions log
+│       ├── REMOVE_ZOD.md           # Dropping Zod: Standard Schema in place of ZodType, a hand-written
+│       │                           # registration validator, guardrail tests, decisions log
 │       ├── CORS.md                 # Full CORS design: preflight vs. Router's existing OPTIONS
 │       │                            # handling, credentials/wildcard guard, multi-policy, decisions log
 │       └── Loadbalancer-v1.md      # Full load balancer design: leases, strategy seam, streaming
@@ -752,13 +760,22 @@ A failing schema throws `ValidationError`, which `Router` already catches
 through the same pipeline as any other `HttpError` — no separate error
 mechanism.
 
+**Any [Standard Schema](https://standardschema.dev) validator works.** `validate()` calls each
+schema through the spec's one entry point (`schema["~standard"].validate(value)`, awaited, so
+sync and async validators alike) and turns any returned `issues` into the `ValidationError`'s
+`details`. Zod, Valibot and ArkType implement the spec; so can a few hand-written lines. Empire
+copies the spec's types into `src/validation/standard/` rather than importing them, which is what
+keeps it dependency-free. A validator that *throws* instead of returning issues is a bug in the
+validator and propagates as a 500. The repository itself contains no validation library - not
+even as a dev dependency - so `examples/10-validation` and the tests use small hand-written
+validators, and the READMEs explain how a user brings Zod.
 **`ctx.query` and `ctx.params` are always strings.** Both come off the raw
 URL, so a query param intended as a number (`?page=2`) arrives as the
 string `"2"` — schemas validating them need `z.coerce.number()` rather
 than `z.number()`, or a well-formed request fails validation.
 
-Full design, the Zod dependency decision, and the decisions log live in
-`doc/features/VALIDATION.md`.
+Full design and the decisions log live in `doc/features/VALIDATION.md`; the later move from Zod
+to Standard Schema is in `doc/features/REMOVE_ZOD.md`.
 
 ---
 

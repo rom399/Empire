@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/rom399/Empire/actions/workflows/ci.yml/badge.svg)](https://github.com/rom399/Empire/actions/workflows/ci.yml)
 
-A lightweight TypeScript web framework built from scratch on Node's `http` module. Routing, a middleware pipeline, a Context API, static file serving, dependency injection, and centralized error handling - all with zero runtime dependencies. Schema-based validation is the one deliberate exception, depending on [Zod](https://zod.dev) (see [`doc/features/VALIDATION.md`](src/empire/doc/features/VALIDATION.md) for why).
+A lightweight TypeScript web framework built from scratch on Node's `http` module. Routing, a middleware pipeline, a Context API, static file serving, dependency injection, and centralized error handling - all with zero runtime dependencies. Schema-based validation accepts any [Standard Schema](https://standardschema.dev) validator - [Zod](https://zod.dev), Valibot, ArkType or a hand-written one - so you bring your own and Empire depends on none of them - the repository contains no validation library at all. See [Using Zod](src/empire/README_DEVELOPMENT.MD#using-zod) for how to add one, and [`doc/features/REMOVE_ZOD.md`](src/empire/doc/features/REMOVE_ZOD.md) for why.
 
 Empire exists to answer a question that using a framework never does: what is actually happening between the socket and your handler? Express, Koa, Fastify, and ASP.NET Core all solve the same problems in recognisably similar ways, and the fastest way to understand those solutions is to build them. Every feature here is implemented directly against Node's `http` module rather than wrapped around an existing library.
 
@@ -14,7 +14,7 @@ Empire exists to answer a question that using a framework never does: what is ac
 - Middleware pipeline executing in registration order (`app.use()`)
 - Static file serving, with optional URL prefixes and SPA fallback
 - A hand-rolled dependency injection container - singleton/scoped/transient lifetimes, disposal, graceful shutdown
-- Schema-based request validation (body, query, route params) via `validate()`, backed by Zod
+- Schema-based request validation (body, query, route params) via `validate()`, working with any Standard Schema validator (Zod, Valibot, ArkType, or your own)
 - A small layer-7 load balancer - backends that register themselves, round robin or least connections, and a live 3D dashboard
 - Centralized error handling built around `HttpError`
 - Configurable request body size limit
