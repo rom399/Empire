@@ -14,7 +14,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
  */
 describe("Context sharing between middleware and handlers", () => {
 
-    const PORT = 43101;
+    const PORT = 18101;
     let app: Empire | undefined;
 
     afterEach(async () => {

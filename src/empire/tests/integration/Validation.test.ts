@@ -7,7 +7,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 describe("Validation over a real request", () => {
 
     let app: Empire | undefined;
-    let port = 44200;
+    let port = 19200;
 
     afterEach(async () => {
         await app?.stop();

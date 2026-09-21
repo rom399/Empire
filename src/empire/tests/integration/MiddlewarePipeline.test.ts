@@ -16,7 +16,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 describe("Middleware pipeline", () => {
 
     let app: Empire | undefined;
-    let port = 43200;
+    let port = 18200;
 
     afterEach(async () => {
         await app?.stop();

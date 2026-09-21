@@ -52,26 +52,47 @@ export function startHttpServer(handler: http.RequestListener): Promise<RunningS
     });
 }
 
+/** How many times startEmpire() picks a fresh port if the one it chose is taken before it can listen. */
+const MAX_PORT_ATTEMPTS = 5;
+
 /**
  * Starts an Empire app on a free port. The caller configures routes and
  * middleware in `configure` before it starts listening.
+ *
+ * Asking the OS for a free port and then listening on it are two steps, and
+ * another test process running in parallel can take the port in between - so
+ * when it is not pinned by the caller, an EADDRINUSE is retried with a new
+ * port instead of failing an unrelated test.
  */
 export async function startEmpire(
     configure: (app: Empire) => void,
     port?: number
 ): Promise<RunningServer & { app: Empire; logger: TestLogger }> {
-    const logger = new TestLogger();
-    const chosenPort = port ?? await getFreePort();
-    const app = new Empire({ host: LOOPBACK, port: chosenPort, logger, shutdownTimeoutMs: 1000 });
+    for (let attempt = 1; ; attempt++) {
+        const logger = new TestLogger();
+        const chosenPort = port ?? await getFreePort();
+        const app = new Empire({ host: LOOPBACK, port: chosenPort, logger, shutdownTimeoutMs: 1000 });
 
-    configure(app);
-    await app.start();
+        configure(app);
 
-    return {
-        app,
-        logger,
-        port: chosenPort,
-        url: `http://${LOOPBACK}:${chosenPort}`,
-        stop: () => app.stop(),
-    };
+        try {
+            await app.start();
+        } catch (err) {
+            const portTaken = err instanceof Error && "code" in err && err.code === "EADDRINUSE";
+
+            if (port !== undefined || !portTaken || attempt >= MAX_PORT_ATTEMPTS) {
+                throw err;
+            }
+
+            continue;
+        }
+
+        return {
+            app,
+            logger,
+            port: chosenPort,
+            url: `http://${LOOPBACK}:${chosenPort}`,
+            stop: () => app.stop(),
+        };
+    }
 }

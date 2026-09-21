@@ -12,7 +12,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 describe("Dependency injection over a real request", () => {
 
     let app: Empire | undefined;
-    let port = 44100;
+    let port = 19100;
 
     afterEach(async () => {
         await app?.stop();

@@ -13,7 +13,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 describe("PUT / PATCH / DELETE", () => {
 
     let app: Empire | undefined;
-    let port = 43800;
+    let port = 18800;
 
     afterEach(async () => {
         await app?.stop();
@@ -102,7 +102,7 @@ describe("PUT / PATCH / DELETE", () => {
 describe("OPTIONS", () => {
 
     let app: Empire | undefined;
-    let port = 43900;
+    let port = 18900;
 
     afterEach(async () => {
         await app?.stop();
