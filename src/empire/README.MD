@@ -142,8 +142,7 @@ Run (from `package-example/`): `npx tsx examples/01-basic-server/server.ts`
 
 ```ts
 import process from "process";
-import { z } from "zod";
-import { Empire, validate } from "empire-ts";
+import { Empire, BadRequestError } from "empire-ts";
 
 const app = new Empire({
     host: "localhost",
@@ -188,29 +187,62 @@ app.get("/users/:id", (ctx) => {
     ctx.json(user);
 });
 
-const createUserSchema = z.object({
-    name: z.string().min(1, "name is required"),
-    role: z.string().optional(),
-});
+// A JSON body arrives as `unknown`, so each handler checks the fields it needs
+// and throws BadRequestError (a 400) for anything missing or malformed. For
+// schema-based checking with per-field details, see examples/10-validation.
+function readObject(body: unknown): Record<string, unknown> {
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+        throw new BadRequestError("Request body must be a JSON object");
+    }
 
-app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) => {
+    return body as Record<string, unknown>;
+}
+
+function readText(body: Record<string, unknown>, field: string): string | undefined {
+    const value = body[field];
+
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (typeof value !== "string" || value === "") {
+        throw new BadRequestError(`${field} must be a non-empty string`);
+    }
+
+    return value;
+}
+
+function requireText(body: Record<string, unknown>, field: string): string {
+    const value = readText(body, field);
+
+    if (value === undefined) {
+        throw new BadRequestError(`${field} is required`);
+    }
+
+    return value;
+}
+
+app.post("/users", async (ctx) => {
+    const body = readObject(await ctx.jsonBody());
+
     const newUser = {
         id:   String(users.length + 1),
-        name: body.name,
-        role: body.role ?? "user",
+        name: requireText(body, "name"),
+        role: readText(body, "role") ?? "user",
     };
 
     users.push(newUser);
 
     ctx.status(201).json(newUser);
-}));
-
-const replaceUserSchema = z.object({
-    name: z.string().min(1, "name is required"),
-    role: z.string().min(1, "role is required"),
 });
 
-app.put("/users/:id", validate({ body: replaceUserSchema })(async (ctx, { body }) => {
+app.put("/users/:id", async (ctx) => {
+    // The body is checked before the lookup, so an invalid body answers 400
+    // even when the id does not exist.
+    const body = readObject(await ctx.jsonBody());
+    const name = requireText(body, "name");
+    const role = requireText(body, "role");
+
     const index = users.findIndex((u) => u.id === ctx.params.id);
 
     if (index === -1) {
@@ -220,17 +252,16 @@ app.put("/users/:id", validate({ body: replaceUserSchema })(async (ctx, { body }
 
     // Full replace — every field comes from the request body, nothing
     // carries over from the existing user except the id from the URL.
-    users[index] = { id: ctx.params.id, name: body.name, role: body.role };
+    users[index] = { id: ctx.params.id, name, role };
 
     ctx.json(users[index]);
-}));
-
-const updateUserSchema = z.object({
-    name: z.string().min(1, "name is required").optional(),
-    role: z.string().min(1, "role is required").optional(),
 });
 
-app.patch("/users/:id", validate({ body: updateUserSchema })(async (ctx, { body }) => {
+app.patch("/users/:id", async (ctx) => {
+    const body = readObject(await ctx.jsonBody());
+    const name = readText(body, "name");
+    const role = readText(body, "role");
+
     const user = users.find((u) => u.id === ctx.params.id);
 
     if (!user) {
@@ -239,10 +270,16 @@ app.patch("/users/:id", validate({ body: updateUserSchema })(async (ctx, { body 
     }
 
     // Partial update — only fields present in the body are touched.
-    Object.assign(user, body);
+    if (name !== undefined) {
+        user.name = name;
+    }
+
+    if (role !== undefined) {
+        user.role = role;
+    }
 
     ctx.json(user);
-}));
+});
 
 app.delete("/users/:id", (ctx) => {
     const index = users.findIndex((u) => u.id === ctx.params.id);
@@ -385,7 +422,8 @@ all do. To use Zod:
    validate({ query: z.object({ page: z.coerce.number().int().min(1).default(1) }) })
    ```
 
-A schema that fails answers `400` with `{ "error": "...", "details": [{ "field": "body.name", "message": "name is required" }] }`.
+A request that fails answers `400` with `{ "error": "...", "details": [{ "field": "body.name", "message": "name is required" }] }`,
+listing the problems from the body, the query and the params together.
 Empire does not install, pin or test against Zod, Valibot or ArkType - they are named because they
 implement the standard. You can also write a validator by hand; see the
 [Validation section of README_DEVELOPMENT.MD](https://github.com/rom399/Empire/blob/main/src/empire/README_DEVELOPMENT.MD#validation).

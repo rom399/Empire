@@ -12,7 +12,7 @@ Check every changed file against `CONTRIBUTING.md` before a PR is opened. Report
 - **`I`-prefixed interfaces** - `IServiceCollection`, not `ServiceCollectionInterface` or unprefixed.
 - **JSDoc on every public class, method, and property** - comments explain *why*, not *what*; no inline comments unless the reasoning is genuinely non-obvious.
 - **No magic numbers or strings** - named constants instead (`DEFAULT_PORT`, `MAX_BODY_SIZE`), not bare literals scattered through logic.
-- **No new runtime dependencies** - `zod` is the one existing exception, already agreed on and scoped to `src/validation/`. Flag any new `dependencies` entry in `package.json` as something requiring explicit sign-off, not something to wave through.
+- **No runtime dependencies** - `empire-ts` has none, and the repository imports no validation library (Zod was removed; users bring their own). Flag any `dependencies` entry in `package.json`, and any import of `zod` or another validation library, as something requiring explicit sign-off, not something to wave through.
 - **No deeply nested code** - flat, early-return style over nested callbacks or chained `.then()`.
 - **Constructor injection only** - no service locator pattern.
 - **A test file exists for every new or changed class**, mirroring its path under `tests/unit/`, covering failure cases as well as the golden path.

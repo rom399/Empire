@@ -53,8 +53,8 @@ spawning in and immediately picking up its share.
 
 **Dependency stance:** zero new **npm** dependencies. Proxying is `node:http`
 plus stream piping; registration uses `fetch` (built into Node 18+) on the
-backend side and `validate()` + `zod` (already the one accepted dependency)
-on the balancer side; the visualizer streams over Server-Sent Events.
+backend side and hand-written checks (`validateRegistrationRequest`, no
+validation library) on the balancer side; the visualizer streams over Server-Sent Events.
 
 three.js is the one deliberate exception, and it's **browser-side only**: the
 dashboard page loads it in the browser; the `empire-ts` package never
@@ -206,8 +206,8 @@ expiry.
   other's traffic). After expiry the id is free again.
 - Static backends (`addStatic`, or the `backends:` shorthand) are pinned:
   no lease, never expire, and `PUT`/`DELETE` against their id → `409`.
-- Body validated with `validate()` + a zod schema: `url` must be an
-  absolute `http:` URL; `id` matches the same safe character set as request
+- Request validated by hand (`validateRegistrationRequest`), reporting every
+  problem in one `400`: `url` must be an absolute `http:` URL; `id` matches the same safe character set as request
   IDs (alphanumeric, `-`, `_`, `:`, ≤128 chars) since it ends up in logs and
   the dashboard.
 - **Expiry sweep:** an `unref()`'d interval every `leaseTtlMs / 2` removes
@@ -830,9 +830,11 @@ position, that position was taken.
   an error with a stack trace. That is noisy while no backend is registered -
   a normal state here - and is the thing `app.onError` should quiet when it
   lands; the balancer does not special-case it.
-- `BackendRegistrationEndpoint.ts` imports `zod` directly for its `validate()`
-  schemas, as this doc's design specifies. That extends Zod beyond
-  `src/validation/`, where CLAUDE.md scopes it; still one runtime dependency.
+- `BackendRegistrationEndpoint.ts` first imported `zod` directly for its
+  `validate()` schemas, as this doc's design specified. Zod has since been
+  removed from the whole repository (`doc/features/REMOVE_ZOD.md`): the endpoint
+  now uses the hand-written `validateRegistrationRequest`, and `empire-ts` has
+  no runtime dependency.
 - **Layout.** `src/loadbalancing/` is split by concern rather than left flat:
   `backends/` (registry), `strategy/`, `proxy/` (middleware, `forwardRequest`),
   `registration/` (endpoint and the backend-side client), `monitoring/` (events,

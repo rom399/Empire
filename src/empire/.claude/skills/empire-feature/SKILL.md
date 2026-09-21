@@ -12,12 +12,12 @@ Follow this procedure when adding a new feature to Empire (a new class, a new ph
 - JSDoc on every public class, method, and property - explain *why*, not what.
 - No magic numbers or strings - name them as constants.
 - Constructor injection for dependencies - never a service locator.
-- Do not add a new npm dependency without the user explicitly agreeing to it first. Empire's zero-dependency stance (Zod is the one deliberate, already-agreed exception, scoped to `src/validation/` only) is a real design decision, not an oversight to work around.
+- Do not add a new npm dependency without the user explicitly agreeing to it first. Empire has no runtime dependencies and keeps no validation library in the repository, not even as a dev dependency (Zod was removed; `validate()` accepts any Standard Schema validator the user brings - see `doc/features/REMOVE_ZOD.md`). That is a real design decision, not an oversight to work around.
 
 ## 2. Write unit tests in `tests/unit/`, mirroring `src/`'s structure
 
 - One test file per class: `tests/unit/<same-path-as-src>/ClassName.test.ts`.
-- Cover the golden path *and* failure cases - not just the happy path. Real bugs in this repo (a factory throwing synchronously escaping `resolve()`'s Promise contract, Zod's empty-vs-missing-field message difference) were caught specifically by writing failure-case tests, not by assuming the happy path was the only thing worth verifying.
+- Cover the golden path *and* failure cases - not just the happy path. Real bugs in this repo (a factory throwing synchronously escaping `resolve()`'s Promise contract, a validator's empty-vs-missing-field message difference) were caught specifically by writing failure-case tests, not by assuming the happy path was the only thing worth verifying.
 - Test names describe behavior in plain English (`it('throws when resolving an unregistered service')`), not vague labels like `it('works')`.
 - Use `tests/fixtures/` for shared mocks/helpers rather than duplicating them per test file.
 

@@ -141,7 +141,8 @@ empire/
 │   │   ├── logging/
 │   │   ├── middleware/             # BuiltInMiddleware (FINDING 5), CorsMiddleware (Phase 16)
 │   │   ├── di/                     # ServiceCollection, ServiceProvider, ServiceScope, ServiceToken
-│   │   └── validation/             # validate() - body/query/params, pass and failure cases
+│   │   └── validation/             # validate() - body/query/params, pass and failure cases; formatIssueField;
+│   │                               # type-level tests for the copied StandardSchemaV1
 │   ├── integration/                # Real-server tests: ContextSharing, MiddlewarePipeline,
 │   │                                # RequestBody, FileStreaming (FINDING 1, 3, 4, 6-8),
 │   │                                # DependencyInjection, ExampleAuth, HttpVerbs,
@@ -154,7 +155,9 @@ empire/
 │   └── fixtures/
 │       ├── static/                 # Static file test assets
 │       ├── services/                # TestLogger.ts — in-memory ILogger for tests
-│       └── http/                    # MockHttp.ts — IncomingMessage/ServerResponse stand-ins
+│       ├── http/                    # MockHttp.ts — IncomingMessage/ServerResponse stand-ins
+│       └── validation/              # schemas.ts — hand-written Standard Schema validators (objectSchema,
+│                                    # stringField, numberField, ...) standing in for a validation library
 │
 ├── examples/                       # For developers extending Empire itself - imports the
 │   │                                # source tree directly ("../../src/Empire"), so these run
@@ -206,7 +209,7 @@ empire/
 │       ├── VALIDATION.md           # Full validation design: the Zod dependency decision,
 │       │                           # validate() wrapper, ValidationError, decisions log
 │       ├── REMOVE_ZOD.md           # Dropping Zod: Standard Schema in place of ZodType, a hand-written
-│       │                           # registration validator, guardrail tests, decisions log
+│       │                           # registration validator, decisions log
 │       ├── CORS.md                 # Full CORS design: preflight vs. Router's existing OPTIONS
 │       │                            # handling, credentials/wildcard guard, multi-policy, decisions log
 │       └── Loadbalancer-v1.md      # Full load balancer design: leases, strategy seam, streaming
@@ -758,7 +761,9 @@ app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) =>
 
 A failing schema throws `ValidationError`, which `Router` already catches
 through the same pipeline as any other `HttpError` — no separate error
-mechanism.
+mechanism. Body, query and params are all checked (in that order) and every
+problem is reported in one `ValidationError`, so a client sees everything wrong
+with a request at once.
 
 **Any [Standard Schema](https://standardschema.dev) validator works.** `validate()` calls each
 schema through the spec's one entry point (`schema["~standard"].validate(value)`, awaited, so

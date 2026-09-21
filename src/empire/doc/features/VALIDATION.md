@@ -1,6 +1,11 @@
 # Empire — Validation: Design & Build Doc
 
 **Status:** Implemented — V-1 through V-6 all complete and shipped (see §3)
+
+> **Superseded in part.** This doc describes the original Zod-based build. Empire no longer
+> depends on Zod: `validate()` accepts any Standard Schema validator and the repository contains
+> no validation library. §2.1's dependency decision and the Zod-typed snippets below are kept as
+> history - `doc/features/REMOVE_ZOD.md` is the current design.
 **Scope:** Empire (native TypeScript webserver). Phase 11 in `PLAN.md`.
 
 ## 1. Context & Goals
@@ -26,6 +31,8 @@ one place a dependency is the right call — see §2.1.
 ## 2. Design
 
 ### 2.1 The dependency question — this breaks "zero runtime dependencies"
+
+> *Superseded - see `doc/features/REMOVE_ZOD.md`. Zod is no longer a dependency.*
 
 Empire has stayed dependency-free through routing, middleware, static
 files, and a full DI container. Validation is different: schema
@@ -267,4 +274,6 @@ build - see §8. One remains genuinely open:
 - **2026-08-19** — Naming resolved: `ValidationError`, not `PLAN.md`'s original `ValidationException`, confirmed as final (not just recommended) - `PLAN.md`'s Phase 11 section now cross-references this doc and explains the departure, so it's not silent drift.
 - **2026-08-19** — `ValidationIssue` (the `{ field, message }` shape) was split into its own file, `src/errors/ValidationIssue.ts`, rather than living inside `ValidationError.ts` as §2.3's snippet showed - required by the one-type-per-file convention in `CONTRIBUTING.md`/`doc/ARCHITECTURE.md`, same treatment every DI type got.
 - **2026-08-19** — `ValidationSchemas` and `Validated` (§2.2's snippet) were likewise split into their own files under `src/validation/`, for the same one-type-per-file reason - `validate.ts` itself keeps only the `validate()` function and its private `parseOrThrow()` helper, the same pattern `ServiceCollection.ts`'s private `crash()` helper already established for DI.
+- **2026-09-21** — `validate()` now checks body, query and params and reports every problem in one `ValidationError` (body, then query, then params), rather than stopping at the first failing location; the `{ error, details }` response is unchanged. This supersedes the "first failing one on failure" line in §5's checklist.
+- **2026-09-21** — Zod removed entirely (`doc/features/REMOVE_ZOD.md`). `validate()` now accepts any Standard Schema v1 validator through a copy of the interface in `src/validation/standard/`; `zod` left `package.json` (runtime and dev) and `package-example/package.json`; the examples and tests validate with hand-written validators; the READMEs explain how a user installs and imports Zod. §2.1's packaging decision above no longer applies.
 - **2026-08-19** — Real behavior found while writing tests, not anticipated by this doc: Zod's custom `.min(1, "message")` only fires when a field is *present but empty*; a field that's missing entirely fails Zod's own base type check first, with Zod's own message, not the custom one. Documented in §5 and covered by separate tests for each case in `tests/integration/Validation.test.ts` rather than assuming one test covers both.

@@ -23,8 +23,8 @@ experimental notice in [README.MD](README.MD).
   as a hub, backends on a ring, each request a particle - with per-backend
   drill-down into a route table, a live call tail and a route
   constellation. Fed by Server-Sent Events from `LoadBalancerMonitor`.
-  three.js loads in the browser only; `empire-ts` still has one runtime
-  dependency.
+  three.js loads in the browser only; `empire-ts` has no runtime
+  dependencies.
 - `Context.route`: the route pattern `Router` matched (`/users/:id`), and
   `createRouteHeaderMiddleware()`, which reports it as `X-Empire-Route`.
 - `examples/12-load-balancer`: a balancer, a configurable self-registering
@@ -34,6 +34,37 @@ experimental notice in [README.MD](README.MD).
   `LoadBalancerMonitor.inFlight()`, and `createLoadBalancerMiddleware` refuses
   to start unless the strategy and the balancer share one monitor. The example
   takes it as an argument: `server.ts least-connections`.
+- `StandardSchemaV1` and its supporting types (`StandardSchemaProps`,
+  `StandardSchemaResult`, `StandardSchemaSuccess`, `StandardSchemaFailure`,
+  `StandardSchemaIssue`, `StandardSchemaPathSegment`, `StandardSchemaTypes`):
+  a copy of the [Standard Schema](https://standardschema.dev) v1 interface,
+  which is what `validate()` now accepts.
+
+### Changed
+
+- **Breaking:** `empire-ts` no longer depends on Zod, and `npm install
+  empire-ts` no longer installs it. `validate()` accepts any Standard
+  Schema validator - Zod 3.24 and later, Valibot, ArkType, or a hand-written
+  one - and `ValidationSchemas` is typed with `StandardSchemaV1` instead of
+  `ZodType`. To keep validating with Zod, install it yourself
+  (`npm install zod`); the schemas and the `validate()` call sites do not
+  change. `README.MD` has a "Validation with Zod" section.
+- `validate()` now checks the body, the query and the params and reports every
+  problem in one `400`, in that order, instead of stopping at the first
+  location that fails. The `{ error, details }` response body is unchanged.
+- A validation issue about a whole value, with no path, now reports its
+  `field` as `body` (or `query`, `params`) rather than `body.`.
+- The backend registration endpoint validates without Zod and reports every
+  problem in one `400`: a bad id and a bad url are both listed in `details`.
+- The examples no longer need Zod. `10-validation` validates with
+  hand-written Standard Schema validators; `02-routing`, `05-error-handling`,
+  `09-dependency-injection` and `full-featured.ts` check request bodies with
+  `BadRequestError`.
+
+### Removed
+
+- The `zod` dependency, from `package.json` and `package-example/package.json`.
+  `require("empire-ts")` now loads no third-party module.
 
 ## [0.1.3] - 2026-09-14
 

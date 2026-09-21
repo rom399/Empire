@@ -1297,9 +1297,10 @@ for the real API.
 
 ## Phase 11 — Validation ✅
 
-Full design lives in `doc/features/VALIDATION.md`. Zod chosen over a
-hand-rolled validator (the first deliberate exception to Empire's
-zero-dependency rule - see that doc's §2.1 for why); `ValidationError`
+Full design lives in `doc/features/VALIDATION.md`. Built first on Zod
+(a deliberate exception to Empire's zero-dependency rule - see that doc's
+§2.1), then moved to the Standard Schema interface so Empire depends on no
+validation library at all - see `doc/features/REMOVE_ZOD.md`. `ValidationError`
 (not `ValidationException` below - see that doc's §2.3/§8) extends the
 existing `BadRequestError`.
 
@@ -1309,7 +1310,8 @@ existing `BadRequestError`.
 * ✅ Query validation — `validate({ query })`, including `z.coerce.*` for
   the all-strings-off-the-URL gotcha documented in the design doc
 * ✅ Route parameter validation — `validate({ params })`
-* ✅ Schema validation — Zod, `ZodType<T>`
+* ✅ Schema validation — any Standard Schema validator, `StandardSchemaV1<unknown, T>`
+  (Zod, Valibot, ArkType or hand-written; originally `ZodType<T>`)
 * ✅ ~~ValidationException~~ — `ValidationError`, `src/errors/ValidationError.ts`
   (naming departure from this task's original wording, deliberate - see
   `doc/features/VALIDATION.md` §2.3/§8)
@@ -1527,7 +1529,7 @@ Not yet designed. Expands Phase 14's original Controllers scope -
 ASP.NET Core-style `@Controller`/`@Get`/`@Post` decorators registering
 through the existing `Router`, `IActionResult`-style response helpers,
 and model binding for route params/query/body, likely built on the
-existing Zod-based validation (`src/validation/`) rather than a
+existing Standard Schema-based validation (`src/validation/`) rather than a
 separate mechanism.
 
 **Open question:** whether this includes server-rendered views, or

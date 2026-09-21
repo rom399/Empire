@@ -416,7 +416,9 @@ app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) =>
 A failing schema throws `ValidationError` (a `BadRequestError`), which
 goes through Empire's existing error pipeline automatically - no separate
 mechanism to learn. The response includes both a readable `error` string
-and a structured `details` array naming every failing field:
+and a structured `details` array naming every failing field - across the body,
+the query and the route params, so a client sees everything wrong with a request
+at once:
 
 ```json
 {
@@ -471,10 +473,10 @@ const pageQuery: StandardSchemaV1<unknown, { page: number }> = {
 app.get("/things", validate({ query: pageQuery })((ctx, { query }) => ctx.json({ page: query.page })));
 ```
 
-Empire's own examples validate this way (see `examples/10-validation`), which is how the
-repository stays free of any validation library. A failure produces exactly the same `400`
-body as the Zod examples above, with the
-issue's path turned into `field` (`query.page`). A validator that *throws* instead of
+`examples/10-validation` validates this way, which is how the repository stays free of any
+validation library. A failure produces exactly the same `400` body as the Zod examples above,
+with the issue's path turned into `field` (`query.page`); an issue with no path applies to the
+whole value and reports just `body` (or `query`, `params`). A validator that *throws* instead of
 returning issues is treated as a bug and answers `500`.
 
 See `examples/10-validation` for a runnable version covering body, query
@@ -887,7 +889,7 @@ npx tsx examples/02-routing/server.ts
 | `07-body-size-limit` | 8007 | A deliberately small `maxBodySize`, so the automatic `413` response is easy to trigger |
 | `08-authentication` | 8008 | A worked example of writing your own auth middleware: Bearer token parsing, `WWW-Authenticate` on rejection, and handing an identity to route handlers via `ctx.state` |
 | `09-dependency-injection` | 8009 | The DI container wired into a real app: a singleton in-memory repository backing three `/records` routes, and a scoped service that calls an "upstream" API over a real HTTP request via `ctx.services` |
-| `10-validation` | 8010 | `validate()` covering body, query (with `z.coerce` for the all-strings-off-the-URL gotcha), and route param validation, each with a passing and a failing request |
+| `10-validation` | 8010 | `validate()` covering body, query (converting the all-strings-off-the-URL values to numbers), and route param validation, each with a passing and a failing request, using hand-written Standard Schema validators so nothing extra is installed |
 | `11-cors` | 8011 | `createCorsMiddleware()` covering an allowed vs. disallowed origin, a preflight with custom headers and credentials, and a stricter multi-policy for `/admin` |
 | `12-load-balancer` | 8012 | A load balancer with a live 3D dashboard at `/_lb`. `server.ts` is the balancer; `backend.ts <id> <port> [latencyMs]` starts a self-registering backend and `traffic.ts` generates requests, with a scripted walkthrough in `server.ts`'s header comment |
 

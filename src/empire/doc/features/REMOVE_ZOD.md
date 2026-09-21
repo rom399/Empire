@@ -1,6 +1,6 @@
 # Empire — Remove Zod: Design & Build Doc
 
-**Status:** Proposed - design settled, ready to build
+**Status:** Implemented - see §7 for what was built and where it departed from this design
 **Scope:** Native TypeScript architecture. A follow-up to Phase 11 (Schema Validation) in `PLAN.md`, and it also touches the Phase 23 registration endpoint.
 **Timeline:** Designed by Claude Sonnet 5 ➡️ Executed by Sonnet
 
@@ -54,7 +54,8 @@ becomes something a *user* installs if they want it, and the READMEs explain how
   `package-example/package.json`) mentions `zod`; `package.json` has no
   `dependencies` block; no file under `src/`, `examples/`, `tests/` or
   `package-example/` imports it; `require("empire-ts")` loads no third-party
-  module; nothing emitted under `dist/` (`.js` or `.d.ts`) mentions `zod`.
+  module; nothing emitted under `dist/` (`.js` or `.d.ts`) imports or requires `zod` (doc comments
+  may still name it as a compatible validator).
 * **Goal 2 - `validate()` accepts any Standard Schema v1 validator.** A Zod
   schema a user brings keeps working with no change at the call site, and its
   inferred types (`z.coerce.number()` -> `number`, `.optional()` -> `T | undefined`)
@@ -62,19 +63,20 @@ becomes something a *user* installs if they want it, and the READMEs explain how
 * **Goal 3 - The registration endpoint validates without Zod**, still answering
   `400` with a `ValidationError` and per-field `details`, and reporting every
   problem in one response.
-* **Goal 4 - Behavioural parity for `validate()`.** Same `ValidationError`
-  shape, same `field` path format (`body.user.tags.0`), same failure order
-  (body, then query, then params). One deliberate exception: a root-level issue
-  now reports `body`, not `body.` (see Rule 2).
+* **Goal 4 - Behavioural parity for `validate()`, with two deliberate changes.** Same `ValidationError`
+  shape and same `field` path format (`body.user.tags.0`). The changes: a root-level issue now
+  reports `body`, not `body.` (Rule 2), and body, query and params are all checked and reported
+  together instead of stopping at the first failing location (Rule 1, Decision 2).
 * **Goal 5 - Everything runs without Zod.** The examples, the `package-example`
   mirrors, the embedded example in `README.MD` and the test suite all work with
   no validation library installed.
 * **Goal 6 - The READMEs explain how to bring Zod.** A section shows how to
   install it, import it and pass a schema to `validate()`, with the query-string
   coercion gotcha, and names Valibot and ArkType as other compatible options.
-* **Goal 7 - Regression guardrails.** Tests that fail if `zod` reappears anywhere
-  in code or either `package.json`, if `dependencies` reappears, or if loading the
-  package pulls in any third-party module.
+* **Goal 7 - Regression guardrails. Dropped.** The design planned tests that fail if `zod`
+  reappears in code or either `package.json`, if `dependencies` reappears, or if loading the
+  package pulls in a third-party module. The project owner decided against them after the build
+  (see §7); the rule in Rule 8 now rests on review and the checks run once at the end of Step 4.
 * **Goal 8 - The policy text matches reality.** `CLAUDE.md`, the two skills,
   the READMEs, `VALIDATION.md`, `ARCHITECTURE.md`, `PLAN.md`, `CHANGELOG.md`
   and `Loadbalancer-v1.md` stop describing Zod as an exception.
@@ -245,14 +247,16 @@ export function stringField(options?: { required?: string; min?: [number, string
 export function numberField(options?: { coerce?: boolean; int?: string; min?: [number, string]; positive?: string; optional?: boolean; default?: number }): FieldRule<number>;
 ```
 
-**Exports added to `src/index.ts`:** `StandardSchemaV1` and its six supporting types.
+**Exports added to `src/index.ts`:** `StandardSchemaV1` and its seven supporting types.
 
 ### 2.3 Internal Processing Logic Rules
 
 1. **`validate()` runs each supplied schema through the standard entry point.**
-   Order and short-circuit are unchanged: body, then query, then params; the first
-   location that fails throws, so a bad body is never followed by a query check.
-   For each: `const result = await schema["~standard"].validate(value)`. The
+   Order is unchanged - body, then query, then params - but there is no longer a
+   short-circuit: every supplied schema is checked, the problems from all of them are
+   concatenated in that order, and one `ValidationError` is thrown if there are any. (Added
+   after the first build, at the project owner's request; see Decision 2.) A validator that
+   *throws* still propagates at once, whichever location it is for. For each: `const result = await schema["~standard"].validate(value)`. The
    `await` handles synchronous and asynchronous validators alike.
 2. **Failure vs. success is decided by `result.issues !== undefined`**, per the
    spec. On failure, throw `ValidationError` with
@@ -284,9 +288,10 @@ export function numberField(options?: { coerce?: boolean; int?: string; min?: [n
    `05-error-handling` and `09-dependency-injection` check their request bodies with plain
    `ctx.jsonBody()` and `BadRequestError`, as they did before Phase 11. Their `curl` output
    in the header comments therefore changes (no `details` array) and is re-verified by running them.
-8. **Guardrails (Step 4):** nothing in `src/`, `examples/`, `tests/` or `package-example/` may
+8. **The rule to keep (Step 4):** nothing in `src/`, `examples/`, `tests/` or `package-example/` may
    import `"zod"`; neither `package.json` may mention `zod`; `package.json` may have no
    `dependencies`; and `require`-ing the package entry must load no module from `node_modules`.
+   No test enforces this (Goal 7 was dropped) - it is checked by hand in Step 4 and by review.
 
 ### 2.4 Security & Performance Defaults
 
@@ -316,7 +321,7 @@ left to import - so they are ported (Step 2) rather than kept.
 
 ### Step 1: Types & Structural Definitions
 
-* **Description:** Create the seven files under `src/validation/standard/` exactly as in
+* **Description:** Create the eight files under `src/validation/standard/` exactly as in
   §2.2. Change `ValidationSchemas.ts` to `StandardSchemaV1<unknown, T>`. Export the types
   from `src/index.ts`. Do **not** touch `validate.ts` yet - it will not compile until
   Step 2, so do Steps 1 and 2 in one working tree and run the checks after Step 2.
@@ -362,7 +367,7 @@ left to import - so they are ported (Step 2) rather than kept.
   * An empty `issues: []` array still throws `ValidationError`, with the single fallback detail `{ field: "body", message: "Invalid value" }`.
   * A validator that **throws** an `Error` propagates that error unchanged (not a `ValidationError`).
   * The returned `value` (not the raw input) is what the handler receives - a validator that upper-cases a field proves it.
-  * Body is checked before query, query before params: a failing body with a failing query reports only the body.
+  * Body, query and params are all checked, and their problems are reported together in that order: a failing body with a failing query reports both.
   * A schema is skipped, and its field stays `undefined`, when not supplied (existing behaviour, re-asserted).
   * A root-level issue reports `body`, not `body.` - asserted explicitly as the one intended change.
   * A second vendor stub (`vendor: "valibot-like"`) is accepted - `validate()` does not check the vendor string.
@@ -382,21 +387,15 @@ left to import - so they are ported (Step 2) rather than kept.
   * **Collects everything:** a bad id *and* a bad url produce one `ValidationError` with both details, in id-then-url order.
   * Extra keys (`{ url, weight: 3, "__proto__": { x: 1 } }`) are ignored and `Object.prototype` is untouched afterwards.
   * `validateBackendId` accepts/rejects the same ids and never looks at a body.
-* **Integration Tests** - `tests/integration/RegistrationWithoutZod.test.ts` (ephemeral port via
-  `startEmpire`): a real balancer; `PUT` with a valid body -> 201 and the registry holds the backend;
-  bad id -> 400 JSON `{ error, details: [{ field: "params.id", ... }] }`; bad url -> 400 with
-  `body.url`; **bad id and bad url together -> one 400 listing both**; JSON `null` body -> 400 with
-  field `body`; malformed JSON -> 400 `Invalid JSON`; `DELETE` with a bad id -> 400. Existing
-  `BackendRegistrationEndpoint.test.ts` and the existing `LoadBalancerRegistration` integration test
-  pass **unchanged**.
-* **Integration Tests** - `tests/integration/ValidationWithoutZod.test.ts`: a real Empire server whose
-  routes are validated by hand-written Standard Schemas: a 400 with `details` for a bad body; a 200 with
-  the validator's transformed value; an **asynchronous** validator over a real request; a query and a
-  params schema together.
+* **Integration Tests - dropped.** The design planned `RegistrationWithoutZod.test.ts` and
+  `ValidationWithoutZod.test.ts` (real-socket versions of the registration and `validate()` cases).
+  They were built and then removed at the project owner's request; the unit tests and the ported
+  `Validation.test.ts` remain, and the existing `BackendRegistrationEndpoint.test.ts` and
+  `LoadBalancerRegistration` integration test pass **unchanged**.
 
 ### Step 4: Examples, Packaging, Verification & Documentation
 
-* **Description:** Remove Zod from every remaining place, add the guardrails, and run the full gate.
+* **Description:** Remove Zod from every remaining place and run the full gate.
   1. **Examples** (`examples/` and their `package-example/examples/` mirrors, per the `empire-example-edit`
      skill; the mirror imports from `"empire-ts"` with the port +1000):
      * `10-validation` - rewrite around hand-written Standard Schema validators: a small local helper
@@ -418,24 +417,17 @@ left to import - so they are ported (Step 2) rather than kept.
      `README.md`: install Zod (`npm install zod`), import it, pass a schema to `validate()`, use
      `z.coerce.number()` for query and params, and note Valibot and ArkType as other Standard Schema
      validators. State plainly that Empire neither installs nor tests against them.
-* **Vitest Assertions** - guardrails:
-  * `tests/unit/noZodInProject.test.ts` - walks `src/`, `examples/`, `tests/` and `package-example/`
-    (skipping `node_modules`) and fails, naming the file, on any `from "zod"` / `require("zod")` /
-    `import("zod")`; and asserts neither `package.json` mentions `zod`, and that `package.json` has
-    no `dependencies` (absent or `{}`). The test file itself builds the search string by concatenation
-    so it does not match its own scan. Include a self-test that the scanner catches all three import
-    forms in a temp file.
-  * `tests/unit/noThirdPartyAtRuntime.test.ts` - spawns a child `node` process (via the local `tsx`
-    binary) that installs a `Module._load` hook recording every requested id, requires
-    `src/index.ts`, and exits non-zero if any id resolved into `node_modules`. Allow a generous
-    timeout (the child compiles TypeScript).
+* **Vitest Assertions - guardrails: dropped.** The design planned `noZodInProject.test.ts` (scan for
+  imports of `zod`, both `package.json` files, no `dependencies`) and `noThirdPartyAtRuntime.test.ts`
+  (a child process hooking `Module._load`). Both were built and then removed at the project owner's
+  request, along with the fixture script behind the second.
 * **Verification checklist:**
   * `npx tsc --noEmit` (root) and `cd package-example && npx tsc --noEmit`.
   * `npm run lint`, `npm run verify` - all green, test count reported before and after.
-  * `grep -ri zod` over `src/ examples/ tests/ package-example/ package.json` returns only the
-    guardrail test and the README/doc prose.
-  * Build to a temp folder (`npx tsc -p tsconfig.build.json --outDir <tmp>`) and `grep -r zod <tmp>`
-    returns nothing (`.js` and `.d.ts`).
+  * `grep -ri zod` over `src/ examples/ tests/ package-example/ package.json` returns only comments
+    and strings - no import, no dependency entry.
+  * Build (`npm run build`) and search `dist/` for an import or `require` of `zod`: none. The only
+    matches for the word are doc comments naming Zod as a compatible validator.
   * `npm pack --dry-run`: the listed `package.json` has no `dependencies`.
   * Benchmark, reported not asserted: median of 20 runs of
     `node -e "require('<tmp>/index.js')"` before and after, so the "removes load-time cost" claim is measured.
@@ -459,9 +451,13 @@ All questions are settled. Where the answer is a default, the project owner conf
    Zod-based `validate()` stops at the first failing location, so a bad id hid a bad url. The
    hand-written registration validator collects every problem (id and url) into one
    `ValidationError`, so a single 400 lists everything wrong - more useful to whoever is fixing their
-   backend's registration. Decided by the project owner. `validate()` itself keeps its existing
-   stop-at-first-location order (Rule 1) - widening it to report body, query and params together is a
-   separate behaviour change, not part of this design.
+   backend's registration. Decided by the project owner. **Extended to `validate()` itself after the
+   first build** (project owner, 2026-09-21): it now checks body, query and params and reports every
+   problem in one `ValidationError`, in that order. Fields already carry their `body.`, `query.` or
+   `params.` prefix, so nothing is ambiguous, and the response body keeps its `{ error, details }`
+   form (Non-Goal 3). The cost: a later location's validator still runs when an earlier one has
+   failed, which wastes the work of an async validator. Invalid JSON is still a plain 400 before any
+   validator runs.
 3. **Convert a throwing validator to a 400? - settled: no (Rule 4).** A validator that throws has a bug;
    a 500 is the honest answer and the error is logged.
 4. **Accept `safeParse`-only objects too? - settled: no (Non-Goal 4).** One rule ("Standard Schema")
@@ -514,8 +510,70 @@ type-checks without Zod installed; the test suite no longer needs a dependency i
 
 ## 6. Action Checklist
 
-- [ ] Step 1 - Standard Schema types, `ValidationSchemas`, exports; type-level tests (no Zod import)
-- [ ] Step 2 - `validate()`, `formatIssueField`, the `tests/fixtures/validation` helpers, and the ported `validate.test.ts`
-- [ ] Step 3 - registration endpoint without Zod; unit tests, the ported `Validation.test.ts`, and two integration test files
-- [ ] Step 4 - examples and mirrors rewritten and run, `README.MD` embedded block regenerated, both `package.json` files and lockfiles cleaned, README Zod section, guardrail tests, verify, lint, pack check, benchmark
-- [ ] Docs & policy - `CLAUDE.md`, both skills, `VALIDATION.md`, `PLAN.md`, `CHANGELOG.md` (breaking), `Loadbalancer-v1.md` §7
+- [x] Step 1 - Standard Schema types, `ValidationSchemas`, exports; type-level tests (no Zod import)
+- [x] Step 2 - `validate()`, `formatIssueField`, the `tests/fixtures/validation` helpers, and the ported `validate.test.ts`
+- [x] Step 3 - registration endpoint without Zod; unit tests and the ported `Validation.test.ts` (the two planned integration test files were dropped)
+- [x] Step 4 - examples and mirrors rewritten and run, `README.MD` embedded block regenerated, both `package.json` files and lockfiles cleaned, README Zod section, verify, lint, pack check, benchmark (guardrail tests dropped)
+- [x] Docs & policy - `CLAUDE.md`, both skills, `VALIDATION.md`, `PLAN.md`, `CHANGELOG.md` (breaking), `Loadbalancer-v1.md` §7
+
+---
+
+## 7. As Built
+
+**Result.** `npm run verify` and `npm run lint` are green. Tests went from 795 passed / 2 skipped
+(54 files) to **876 passed / 2 skipped (58 files)** - 81 new tests in 4 new files. All 12 examples
+pass the smoke test, and the four changed examples, their `package-example` mirrors and
+`full-featured.ts` were each run and sent every request their header comments describe (66
+requests, all as expected).
+
+**Measured, not assumed** (Step 4's benchmark, 20 interleaved runs of
+`node -e "require('<dist>/index.js')"`, process start-up included):
+
+| | median | range | `node_modules` files loaded |
+|---|---|---|---|
+| Before (this repository at `93c1c24`, built with Zod) | 130.6 ms | 123.4 - 140.0 | 94 |
+| After | 69.2 ms | 65.3 - 74.6 | 0 |
+
+`npm pack` lists 200 files, and the packed `package.json` has no `dependencies` key.
+
+**Where the build departed from the design:**
+
+1. **`dist/` still says "Zod" in comments.** Goal 1 said nothing emitted mentions `zod`. The doc comments
+   on `validate()`, `ValidationSchemas` and `StandardSchemaV1` name Zod as a compatible validator (an
+   editor hover is where a user learns `z.coerce.number()` is needed), and those comments are emitted.
+   What matters - no `import`, `require` or dependency - holds, so Goal 1 and the checklist were reworded
+   rather than the comments scrubbed.
+2. **Eight type files, not seven.** `StandardSchemaV1` plus seven supporting types
+   (`Props`, `Result`, `Success`, `Failure`, `Issue`, `PathSegment`, `Types`); the design miscounted.
+3. **The fixture grew.** `tests/fixtures/validation/schemas.ts` also has `booleanField` (the ported
+   `validate` test coerces `?verbose=true`), `objectField` (a nested object, for the path tests) and a
+   `pattern` option on `stringField` (the ported params test used a regex). Optional fields are typed
+   `T | undefined`, which the Step 1 type test asserts.
+4. **The endpoint no longer sets `ctx.params`.** It only did so to feed `validate()`; the handlers now
+   take the id directly.
+5. **The type-level tests are not checked by `npm run typecheck`.** `tsconfig.json` includes `src/`,
+   `examples/` and `scripts/` but not `tests/`, so the `@ts-expect-error` and `expectTypeOf` lines in
+   `StandardSchemaV1.test.ts` only run at type level under a config that includes them. They were checked
+   with a temporary `tsconfig` (clean), and `tsc` flagged a typing mistake in a helper in
+   `validate.test.ts` that way, now fixed. This is a gap in the repository's checks, not something this change introduced.
+6. **`package-example` was repacked locally** to verify the mirrors. Its lockfile pinned the old tarball
+   (which depended on Zod), and the mirrors import `StandardSchemaV1`, which the old package lacks.
+   `npm pack` produced a new, gitignored `empire-ts-0.1.3.tgz` (no version bump, nothing published) and
+   `npm install file:../empire-ts-0.1.3.tgz` refreshed `package-example/package-lock.json`, dropping
+   `zod` and the old tarball's `dependencies` entry. Anyone else running `package-example` still packs
+   their own tarball first, as before.
+7. **The guardrail tests and the two integration test files were dropped.** They were built and passing
+   (a scanner for imports of `zod`, a child-process check that loading the package requires only
+   built-ins, and real-socket tests for registration and `validate()`), then removed at the project
+   owner's request. What that leaves uncovered: nothing fails if `zod` or a `dependencies` entry
+   returns, and the registration endpoint is no longer driven over a real socket by a test written
+   for this change (the existing endpoint and registration tests are unchanged and still pass).
+   `validate()` is still driven over a real request by the ported `Validation.test.ts`, and the unit
+   tests cover the merged-errors behaviour. The Step 4 checks were run once by hand instead: no
+   import of `zod` in any code folder, none in either `package.json` or lockfile, and
+   `require("empire-ts")` loading 0 files from `node_modules` (down from 94).
+8. **`validate()` reports every location's problems** rather than stopping at the first. Added after the
+   first build, at the project owner's request (Decision 2, Rule 1); it has its own unit tests.
+
+**Still open:** nothing in this design. Not done, by design: an automated check that a real Zod schema
+works (Non-Goal 7); re-verify by hand in a scratch directory after a Zod upgrade (§5).
