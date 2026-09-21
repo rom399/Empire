@@ -1514,7 +1514,8 @@ no core framework changes, registered via the existing `app.use()`.
 
 ### Tasks
 
-* Request counts per route
+* Request counts per route (`Context.route`, landed early with the load
+  balancer, is the field this needs)
 * Response time distributions
 * Status code breakdowns
 
@@ -1546,17 +1547,30 @@ stays API-only (controllers without a V) - not resolved yet.
 
 ## Phase 23 — Simple Load Balancer
 
-Not yet designed. Explicitly a learning/local-dev feature, not
-production-grade. Depends on Phase 21 (Usage/Statistics Tracking) for
-live per-backend metrics - least-connections specifically needs active
-request counts to route by.
+Explicitly a learning/local-dev feature, not production-grade. Design:
+`doc/features/Loadbalancer-v1.md`. The v1 slice - round robin,
+backends that register themselves and hold a lease, and a live three.js
+dashboard with per-backend drill-down - is built. It did not need Phase 21
+after all: only least connections needs live in-flight counts, and
+`LoadBalancerMonitor` already tracks them.
 
 ### Tasks
 
-* Round robin
-* Weighted round robin
-* Least connections (needs Phase 21's per-backend request counts)
+* ~~Round robin~~ - `RoundRobinStrategy` behind `ILoadBalancingStrategy`
+* ~~Backend self-registration~~ - `BackendRegistry` leases,
+  `createBackendRegistrationEndpoint`, `LoadBalancerRegistration`
+* ~~Streaming proxy~~ - `forwardRequest`, `createLoadBalancerMiddleware`
+* ~~Live dashboard~~ - `createLoadBalancerDashboard`, three.js scene,
+  per-backend drill-down; `Context.route` and `createRouteHeaderMiddleware`
+* Weighted round robin (a new strategy; needs `Backend.weight`, possibly
+  sent at registration)
+* ~~Least connections~~ - `LeastConnectionsStrategy`, reads `inFlight` from
+  `LoadBalancerMonitor`
 * Layer 7 header-based routing
+* Passive ejection of a backend that heartbeats but fails every request
+* Retries for idempotent methods on connect failures
+* Active health checks, external discovery, WebSocket proxying, HTTPS
+  backends, sticky sessions - out of scope for v1
 
 ---
 

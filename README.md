@@ -15,6 +15,7 @@ Empire exists to answer a question that using a framework never does: what is ac
 - Static file serving, with optional URL prefixes and SPA fallback
 - A hand-rolled dependency injection container - singleton/scoped/transient lifetimes, disposal, graceful shutdown
 - Schema-based request validation (body, query, route params) via `validate()`, backed by Zod
+- A small layer-7 load balancer - backends that register themselves, round robin or least connections, and a live 3D dashboard
 - Centralized error handling built around `HttpError`
 - Configurable request body size limit
 - Pluggable logging abstraction (`ILogger`), with a built-in console logger
@@ -57,6 +58,20 @@ app.get("/", (ctx) => {
 await app.start();
 ```
 
+## Load balancer
+
+Empire can also act as a small reverse proxy. Backends register themselves with the balancer and hold a lease, so starting one adds it to the rotation and killing one drops it out on its own, with no config to edit. Requests go to backends by round robin or by least connections (the backend with the fewest requests in flight), and a live three.js dashboard shows every request as it flies from the balancer to the backend that served it, with a drill-down into each backend's routes and calls.
+
+![The load balancer example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](src/empire/doc/images/load-balancer-example.gif)
+
+It is a learning and local-development tool, not a production edge - no TLS, no HTTP/2, no WebSocket upgrades, no retries - and registration is token-protected and loopback-only by default. To see it running, start the balancer, a few backends and some traffic from `src/empire`:
+
+```bash
+npx tsx examples/12-load-balancer/server.ts
+```
+
+The [example's header comment](src/empire/examples/12-load-balancer/server.ts) has the full walkthrough, and the [Load Balancer section of README_DEVELOPMENT.MD](src/empire/README_DEVELOPMENT.MD#load-balancer) covers the details.
+
 ## Documentation
 
 The framework source and its full documentation live in [`src/empire`](src/empire).
@@ -66,14 +81,14 @@ The framework source and its full documentation live in [`src/empire`](src/empir
 
 ## Examples
 
-Eleven runnable examples live in [`src/empire/examples`](src/empire/examples), each a single `server.ts` covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, dependency injection, validation, and CORS. **These are for developers extending Empire itself** - they import the source tree directly. See the [Examples section of README_DEVELOPMENT.MD](src/empire/README_DEVELOPMENT.MD#examples) for the complete list with ports and descriptions.
+Twelve runnable examples live in [`src/empire/examples`](src/empire/examples), each covering one feature - routing, middleware, static files, error handling, a React SPA, body size limits, authentication, dependency injection, validation, CORS, and a load balancer. **These are for developers extending Empire itself** - they import the source tree directly. See the [Examples section of README_DEVELOPMENT.MD](src/empire/README_DEVELOPMENT.MD#examples) for the complete list with ports and descriptions.
 
 ```bash
 cd src/empire
 npx tsx examples/02-routing/server.ts
 ```
 
-If you just want to know how to *use* the published `empire-ts` npm package rather than extend Empire itself, see [`src/empire/package-example`](src/empire/package-example) instead - it mirrors all eleven examples above against a real installed `empire-ts`, importing `"empire-ts"` rather than the source tree.
+If you just want to know how to *use* the published `empire-ts` npm package rather than extend Empire itself, see [`src/empire/package-example`](src/empire/package-example) instead - it mirrors the first eleven examples above against a real installed `empire-ts`, importing `"empire-ts"` rather than the source tree.
 
 ## Repository layout
 

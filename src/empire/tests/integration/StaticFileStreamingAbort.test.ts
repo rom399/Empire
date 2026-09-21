@@ -57,7 +57,7 @@ describe.runIf(process.env.RUN_FLAKY_TESTS === "true")("Static file streaming â€
 
     let dir: string;
     let app: Empire | undefined;
-    let port = 43600;
+    let port = 18600;
 
     beforeAll(() => {
         dir = fs.mkdtempSync(path.join(os.tmpdir(), "empire-static-stream-"));

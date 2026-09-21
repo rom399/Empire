@@ -25,7 +25,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 describe("Malformed request path", () => {
 
     let app: Empire | undefined;
-    let port = 43500;
+    let port = 18500;
 
     afterEach(async () => {
         await app?.stop();

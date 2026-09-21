@@ -22,7 +22,7 @@ describe("File streaming", () => {
     let dir: string;
     let bigFile: string;
     let app: Empire | undefined;
-    let port = 43400;
+    let port = 18400;
 
     beforeAll(() => {
         dir = fs.mkdtempSync(path.join(os.tmpdir(), "empire-stream-"));

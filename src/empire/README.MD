@@ -341,6 +341,47 @@ curl http://localhost:9012/users/1
 curl http://localhost:9012/users/999   # 404
 ```
 
+## Load balancer (experimental)
+
+![The load balancer example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](https://raw.githubusercontent.com/rom399/Empire/main/src/empire/doc/images/load-balancer-example.gif)
+
+`empire-ts` also exports a small layer-7 load balancer -
+`createLoadBalancerMiddleware`, `BackendRegistry`,
+`createBackendRegistrationEndpoint`, `LoadBalancerRegistration` and
+`createLoadBalancerDashboard`, with a live three.js dashboard. It is a
+**learning and local-development tool, not a production edge**: no TLS, no
+HTTP/2, no WebSocket upgrades, no retries.
+
+### How it works
+
+Backends register themselves and hold a lease; a backend that crashes
+simply drops out of rotation when the lease expires. Requests are streamed
+to backends by a pluggable strategy - `RoundRobinStrategy` by default, or
+`LeastConnectionsStrategy`, which sends each request to the backend with the
+fewest requests in flight. The dashboard shows it all live.
+
+### Rules to know before using it
+
+- Register the dashboard and the registration endpoint *before* the load
+  balancer middleware, which is terminal, and register the load balancer
+  before any middleware that reads the request body - the body is streamed
+  through, not buffered.
+- A backend should serve first and *then* register; on shutdown it should
+  deregister first and *then* stop serving, so requests already in flight
+  on it finish.
+- Registration is locked down by default: a bearer token is required, and
+  only loopback clients are served. Whoever can register a backend can steer
+  your traffic - do not combine `allowRemote` with `allowUnauthenticated`.
+- The dashboard loads three.js from a CDN in the browser by default; pass a
+  local `three` install via `threeLocalPath` to work offline.
+
+### Learn more
+
+This is not mirrored in `package-example/` yet. The full walkthrough is in
+[README_DEVELOPMENT.MD](https://github.com/rom399/Empire/blob/main/src/empire/README_DEVELOPMENT.MD)
+and the design in
+[`doc/features/Loadbalancer-v1.md`](https://github.com/rom399/Empire/blob/main/src/empire/doc/features/Loadbalancer-v1.md).
+
 ## What this proves
 
 All twelve were run for real against `node_modules/empire-ts` installed

@@ -15,7 +15,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 describe("Request body over a real socket", () => {
 
     let app: Empire | undefined;
-    let port = 43300;
+    let port = 18300;
 
     afterEach(async () => {
         await app?.stop();

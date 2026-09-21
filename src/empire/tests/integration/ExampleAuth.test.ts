@@ -68,7 +68,7 @@ const authMiddleware: Middleware = (ctx, next) => {
 describe("Example: authentication middleware", () => {
 
     let app: Empire | undefined;
-    let port = 44000;
+    let port = 19000;
 
     afterEach(async () => {
         await app?.stop();

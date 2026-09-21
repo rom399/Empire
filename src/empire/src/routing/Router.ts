@@ -129,6 +129,7 @@ export class Router {
 
             const requestCtx = ctx ?? new Context(req, res);
             requestCtx.params = params;
+            requestCtx.route = route.path;
             await this.invokeHandler(requestCtx, route.handler);
 
             return;

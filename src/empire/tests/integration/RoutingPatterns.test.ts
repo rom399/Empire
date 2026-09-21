@@ -14,7 +14,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 describe("Routing patterns", () => {
 
     let app: Empire | undefined;
-    let port = 43700;
+    let port = 18700;
 
     afterEach(async () => {
         await app?.stop();
