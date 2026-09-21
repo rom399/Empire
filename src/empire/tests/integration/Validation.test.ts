@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { z } from "zod";
 import { Empire } from "../../src/Empire";
 import { validate } from "../../src/validation/validate";
 import { TestLogger } from "../fixtures/services/TestLogger";
+import { numberField, objectSchema, stringField } from "../fixtures/validation/schemas";
 
 describe("Validation over a real request", () => {
 
@@ -14,9 +14,9 @@ describe("Validation over a real request", () => {
         app = undefined;
     });
 
-    const createUserSchema = z.object({
-        name: z.string().min(1, "name is required"),
-        email: z.string().email("email must be a valid address"),
+    const createUserSchema = objectSchema({
+        name: stringField({ required: "name is required" }),
+        email: stringField({ email: "email must be a valid address" }),
     });
 
     it("returns 201 with the validated body when the request is valid", async () => {
@@ -63,9 +63,9 @@ describe("Validation over a real request", () => {
     it("coerces query string values per schema on a real request", async () => {
         port += 1;
         app = new Empire({ host: "127.0.0.1", port, logger: new TestLogger() });
-        const searchSchema = z.object({
-            q: z.string().min(1),
-            page: z.coerce.number().int().min(1).default(1),
+        const searchSchema = objectSchema({
+            q: stringField({ required: "q is required" }),
+            page: numberField({ coerce: true, int: "page must be whole", min: [1, "page must be at least 1"], default: 1 }),
         });
 
         app.get("/search", validate({ query: searchSchema })(async (ctx, { query }) => {
@@ -82,11 +82,11 @@ describe("Validation over a real request", () => {
     it("returns 400 naming the field when a required query param is missing entirely", async () => {
         port += 1;
         app = new Empire({ host: "127.0.0.1", port, logger: new TestLogger() });
-        // A missing field fails Zod's own base type check before a custom
-        // .min(1, "...") message would ever run - that message only fires
+        // A missing field fails the base type check before a custom
+        // "required" message would ever run - that message only fires
         // when the field is present but empty. Asserting on the field name
         // rather than the exact wording keeps this test honest about that.
-        const searchSchema = z.object({ q: z.string() });
+        const searchSchema = objectSchema({ q: stringField() });
 
         app.get("/search", validate({ query: searchSchema })(async (ctx, { query }) => {
             ctx.json({ q: query.q });
@@ -102,7 +102,7 @@ describe("Validation over a real request", () => {
     it("returns 400 with the custom message when a required query param is present but empty", async () => {
         port += 1;
         app = new Empire({ host: "127.0.0.1", port, logger: new TestLogger() });
-        const searchSchema = z.object({ q: z.string().min(1, "q is required") });
+        const searchSchema = objectSchema({ q: stringField({ required: "q is required" }) });
 
         app.get("/search", validate({ query: searchSchema })(async (ctx, { query }) => {
             ctx.json({ q: query.q });

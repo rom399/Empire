@@ -7,7 +7,7 @@
  *   per-request via ctx.services
  * - CORS: a single allowed origin, credentials enabled
  * - Logging middleware
- * - Schema-based request validation via Zod
+ * - Request body checking, with BadRequestError answering 400
  * - HttpError for a clean 404
  *
  * Run: npx tsx full-featured.ts   (from this directory, after npm install)
@@ -23,7 +23,6 @@
  */
 
 import process from "process";
-import { z } from "zod";
 import {
     Empire,
     ConsoleLogger,
@@ -31,7 +30,7 @@ import {
     createToken,
     createLoggerMiddleware,
     createCorsMiddleware,
-    validate,
+    BadRequestError,
     HttpError,
     Resolver,
 } from "empire-ts";
@@ -96,16 +95,27 @@ app.get("/users", async (ctx) => {
     ctx.json(repo.all());
 });
 
-const createUserSchema = z.object({
-    name: z.string().min(1, "name is required"),
-    email: z.string().email("email must be a valid address"),
-});
+app.post("/users", async (ctx) => {
+    const body = await ctx.jsonBody();
 
-app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) => {
+    if (typeof body !== "object" || body === null) {
+        throw new BadRequestError("Request body must be a JSON object");
+    }
+
+    const { name, email } = body as { name?: unknown; email?: unknown };
+
+    if (typeof name !== "string" || name === "") {
+        throw new BadRequestError("name is required");
+    }
+
+    if (typeof email !== "string" || !email.includes("@")) {
+        throw new BadRequestError("email must be a valid address");
+    }
+
     const repo = await getRepo(ctx.services);
-    const user = repo.add(body.name, body.email);
+    const user = repo.add(name, email);
     ctx.status(201).json(user);
-}));
+});
 
 app.get("/users/:id", async (ctx) => {
     const repo = await getRepo(ctx.services);

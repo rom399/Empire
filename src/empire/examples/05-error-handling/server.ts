@@ -3,10 +3,9 @@
  *
  * Demonstrates Empire's error handling with:
  * - Throwing HttpError from a route with a custom status code and message
- * - Schema-based validation via validate() automatically throwing
- *   ValidationError (a BadRequestError) for invalid input, rather than
- *   hand-checking fields on an unchecked body cast - see
- *   examples/10-validation for validate() covering more schema shapes
+ * - Throwing BadRequestError (a 400) for invalid input, such as a
+ *   missing or malformed field in a request body - see
+ *   examples/10-validation for schema-based validation with validate()
  * - Automatic 400 response when ctx.jsonBody() receives invalid JSON
  * - Automatic 500 response for unhandled errors
  * - Server continues running after exceptions
@@ -16,10 +15,9 @@
  */
 
 import process from "process";
-import { z } from "zod";
 import { Empire } from "../../src/Empire";
+import { BadRequestError } from "../../src/errors/BadRequestError";
 import { HttpError } from "../../src/errors/HttpError";
-import { validate } from "../../src/validation/validate";
 
 const app = new Empire({
     host: "localhost",
@@ -41,18 +39,29 @@ app.get("/restricted", () => {
     throw new HttpError(403, "You do not have permission to access this resource");
 });
 
-const createOrderSchema = z.object({
-    productId: z.string().min(1, "productId is required"),
-    quantity: z.number().int().min(1, "quantity must be a positive number"),
-});
+app.post("/orders", async (ctx) => {
+    const body = await ctx.jsonBody();
 
-app.post("/orders", validate({ body: createOrderSchema })(async (ctx, { body }) => {
+    if (typeof body !== "object" || body === null) {
+        throw new BadRequestError("Request body must be a JSON object");
+    }
+
+    const { productId, quantity } = body as { productId?: unknown; quantity?: unknown };
+
+    if (typeof productId !== "string" || productId === "") {
+        throw new BadRequestError("productId is required");
+    }
+
+    if (typeof quantity !== "number" || !Number.isInteger(quantity) || quantity < 1) {
+        throw new BadRequestError("quantity must be a positive number");
+    }
+
     ctx.status(201).json({
         orderId: "ORD-001",
-        productId: body.productId,
-        quantity: body.quantity,
+        productId,
+        quantity,
     });
-}));
+});
 
 app.get("/crash", () => {
     throw new Error("Unexpected error — server should survive this and return 500");

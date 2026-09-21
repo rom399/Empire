@@ -1,26 +1,13 @@
 import { createHash, timingSafeEqual } from "crypto";
-import { z } from "zod";
 import { Context } from "../../http/Context";
 import { HttpError } from "../../errors/HttpError";
 import { Middleware } from "../../types";
-import { validate } from "../../validation/validate";
-import { BACKEND_ID_PATTERN, normalizeBackendUrl } from "../backends/backendIdentity";
 import { BackendRegistrationEndpointOptions } from "./BackendRegistrationEndpointOptions";
 import { BackendRegistry } from "../backends/BackendRegistry";
 import { isLoopbackAddress } from "../isLoopbackAddress";
+import { validateBackendId, validateRegistrationRequest } from "./validateRegistrationRequest";
 
 const BEARER_PATTERN = /^Bearer\s+(.+)$/i;
-
-const idParams = z.object({
-    id: z.string().regex(BACKEND_ID_PATTERN, "must be 1-128 letters, digits, '-', '_' or ':'"),
-});
-
-const registrationBody = z.object({
-    url: z.string().refine(
-        (value) => normalizeBackendUrl(value) !== undefined,
-        "must be an absolute http: origin such as http://127.0.0.1:5001 (no path, query or credentials)"
-    ),
-});
 
 /**
  * Builds the endpoint backends use to register themselves with a
@@ -48,20 +35,18 @@ export function createBackendRegistrationEndpoint(
     const basePath = normalizeMountPath(options.path);
     const expectedToken = resolveToken(options);
 
-    const handleRegister = validate({ params: idParams, body: registrationBody })(
-        (ctx, { params, body }) => {
-            const { created } = registry.register(params.id, body.url);
+    // The body is read first, so malformed JSON is a plain 400 before any field is checked.
+    const handleRegister = async (ctx: Context, backendId: string): Promise<void> => {
+        const { id, url } = validateRegistrationRequest(backendId, await ctx.jsonBody());
+        const { created } = registry.register(id, url);
 
-            ctx.status(created ? 201 : 200).json({ leaseTtlMs: registry.leaseTtlMs });
-        }
-    );
+        ctx.status(created ? 201 : 200).json({ leaseTtlMs: registry.leaseTtlMs });
+    };
 
-    const handleDeregister = validate({ params: idParams })(
-        (ctx, { params }) => {
-            registry.deregister(params.id);
-            ctx.status(204).res.end();
-        }
-    );
+    const handleDeregister = (ctx: Context, backendId: string): void => {
+        registry.deregister(validateBackendId(backendId).id);
+        ctx.status(204).res.end();
+    };
 
     return async (ctx, next) => {
         const id = matchRegistrationPath(ctx.path, basePath);
@@ -77,13 +62,11 @@ export function createBackendRegistrationEndpoint(
             return handleList(ctx, registry);
         }
 
-        ctx.params = { id };
-
         switch (ctx.method) {
             case "PUT":
-                return handleRegister(ctx);
+                return handleRegister(ctx, id);
             case "DELETE":
-                return handleDeregister(ctx);
+                return handleDeregister(ctx, id);
             default:
                 ctx.header("Allow", "PUT, DELETE");
                 throw new HttpError(405, "Method not allowed");

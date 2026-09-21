@@ -38,16 +38,15 @@
 
 import process from "process";
 import * as http from "http";
-import { z } from "zod";
 import { Empire } from "../../src/Empire";
 import { Context } from "../../src/http/Context";
+import { BadRequestError } from "../../src/errors/BadRequestError";
 import { HttpError } from "../../src/errors/HttpError";
 import { Resolver } from "../../src/di/Resolver";
 import { ServiceCollection } from "../../src/di/ServiceCollection";
 import { createToken } from "../../src/di/ServiceToken";
 import { ILogger } from "../../src/logging/ILogger";
 import { ConsoleLogger } from "../../src/logging/ConsoleLogger";
-import { validate } from "../../src/validation/validate";
 
 const PORT = 8009;
 
@@ -216,17 +215,28 @@ app.get("/records/:id", async (ctx) => {
     ctx.json(record);
 });
 
-const createRecordSchema = z.object({
-    name: z.string().min(1, "name is required"),
-    value: z.number(),
-});
+app.post("/records", async (ctx) => {
+    const body = await ctx.jsonBody();
 
-app.post("/records", validate({ body: createRecordSchema })(async (ctx, { body }) => {
+    if (typeof body !== "object" || body === null) {
+        throw new BadRequestError("Request body must be a JSON object");
+    }
+
+    const { name, value } = body as { name?: unknown; value?: unknown };
+
+    if (typeof name !== "string" || name === "") {
+        throw new BadRequestError("name is required");
+    }
+
+    if (typeof value !== "number") {
+        throw new BadRequestError("value must be a number");
+    }
+
     const repository = await requireServices(ctx).resolve(RecordRepositoryToken);
-    const record = await repository.create(body);
+    const record = await repository.create({ name, value });
 
     ctx.status(201).json(record);
-}));
+});
 
 app.get("/upstream-summary", async (ctx) => {
     const upstreamApi = await requireServices(ctx).resolve(UpstreamApiServiceToken);
