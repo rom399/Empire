@@ -9,7 +9,7 @@ const DEFAULT_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
 /**
  * Builds CORS middleware from either a single CorsOptions policy or a
  * path-matched set of policies, registered via the existing app.use() -
- * see doc/features/CORS.md §2.1 for why this stays a plain middleware
+ * see doc/features/04_CORS_Compliance.md §2.1 for why this stays a plain middleware
  * rather than a new Empire.ts method.
  *
  * Every CorsOptions (or, for a policy set, every policy's options and the
@@ -199,7 +199,7 @@ function isPolicySet(
  * swallow a normal throw and let the server boot with CORS responses
  * browsers will always reject. Crashing the process is deliberate,
  * matching ServiceCollection's duplicate-registration crash; see
- * doc/features/CORS.md §2.4 and doc/features/DEPENDENCY_INJECTION.md §2.4.
+ * doc/features/04_CORS_Compliance.md §2.3 (rule 6) and doc/features/02_Dependency_Injection.md §2.3, rule 2.
  */
 function assertValidOptions(options: CorsOptions, label: string): void {
 

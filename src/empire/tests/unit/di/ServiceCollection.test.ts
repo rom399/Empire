@@ -8,7 +8,7 @@ import { createToken } from "../../../src/di/ServiceToken";
  * startup-time configuration bugs, not recoverable runtime conditions - the
  * collection crashes the process instead of throwing, so a try/catch
  * upstream can't swallow the mistake and let the server boot with a broken
- * container. See doc/features/DEPENDENCY_INJECTION.md section 2.4.
+ * container. See doc/features/02_Dependency_Injection.md section 2.3, rules 2 and 3.
  */
 describe("ServiceCollection", () => {
 

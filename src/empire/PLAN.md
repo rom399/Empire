@@ -81,7 +81,7 @@ verified directly against the source:
 `ctx.state: Record<string, unknown>` - a per-request bag for middleware to
 attach data to (e.g. an authenticated user) for downstream middleware and
 route handlers to read. Added as a prerequisite for
-`doc/features/EXAMPLE_AUTHENTICATION_MIDDLEWARE.md`, per the additive-only
+`examples/08-authentication` (see `doc/features/01_Core_Routing_Pipeline.md`, rule 17), per the additive-only
 policy stated above: a new public field, no existing signature changed.
 Deliberately untyped (`Record<string, unknown>`) since `Context` has no
 way to know what any given application stores here - reading a value
@@ -374,7 +374,7 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
   change, not a bug workaround.
 
   Full build plan and step-by-step history:
-  `doc/features/MISSING_HTTP_VERBS.md`.
+  `doc/features/01_Core_Routing_Pipeline.md` (rule 8).
 
 ### Remaining
 
@@ -386,7 +386,7 @@ serves `index.html` inside a matched directory (e.g. `/about/` serves
 
 **Route-level middleware's concrete motivation:** `examples/08-authentication`
 already hand-rolls path-checking inside one global middleware to
-approximate this, and `doc/features/CORS.md` §2.6 does the same thing
+approximate this, and `doc/features/04_CORS_Compliance.md` §2.3 (rule 8) does the same thing
 specifically for CORS policies (matching by path inside the middleware's
 own function body, no `Router`/`Empire.ts` changes) rather than wait for
 this. That's the actual cost of not having this yet - every feature that
@@ -941,7 +941,7 @@ reuse or extend that fixture directory rather than creating a new one.
   on `res.body`, which the handler never touches on this path); replaced
   with a version that bypasses `ctx.path`'s URL normalisation directly and
   actually reaches the 403 branch, confirmed by a temporary break-and-revert
-  of the guard. See `doc/features/PHASE_9_2_CLOSEOUT_TESTS.md` Step 2
+  of the guard. See `doc/features/01_Core_Routing_Pipeline.md` Step 2
 * [x] `it('does not serve files outside root even with encoded traversal segments')`
 
 **Prefix matching**
@@ -978,7 +978,7 @@ without losing most of the value of the test.
   `tests/integration/MiddlewarePipeline.test.ts`'s `'runs middleware in
   registration order'` against a real `Empire` instance rather than
   duplicated here; see the research notes in
-  `doc/features/TEST_UPDATES_EMPIRE_STATICFILEHANDLER.md`
+  `doc/features/01_Core_Routing_Pipeline.md` (Step 2 and Step 3)
 * [x] `it('does not proceed to the next middleware when one does not call next()')`
 * [x] `it('dispatches to a registered route when the middleware chain completes')`
 * [x] `it('get() registers a route reachable via the server')`
@@ -1259,7 +1259,7 @@ Tests: `tests/unit/errors/HttpError.test.ts`
 
 ## Phase 10 — Dependency Injection
 
-Full design lives in `doc/features/DEPENDENCY_INJECTION.md` — this section
+Full design lives in `doc/features/02_Dependency_Injection.md` — this section
 just tracks progress against that doc's DI-1 through DI-9 build order. The
 target API sketch that used to live here (`addSingleton(ILogger, ...)`,
 synchronous `resolve()`) was pre-design pseudocode with the same bug the
@@ -1297,12 +1297,11 @@ for the real API.
 
 ## Phase 11 — Validation ✅
 
-Full design lives in `doc/features/VALIDATION.md`. Built first on Zod
-(a deliberate exception to Empire's zero-dependency rule - see that doc's
-§2.1), then moved to the Standard Schema interface so Empire depends on no
-validation library at all - see `doc/features/REMOVE_ZOD.md`. `ValidationError`
-(not `ValidationException` below - see that doc's §2.3/§8) extends the
-existing `BadRequestError`.
+Full design lives in `doc/features/03_Request_Validation.md`. Built first on
+Zod (a deliberate exception to Empire's zero-dependency rule), then moved to the
+Standard Schema interface so Empire depends on no validation library at all -
+both are covered in that doc. `ValidationError` (not `ValidationException`
+below - see that doc's §2.2) extends the existing `BadRequestError`.
 
 ### Tasks
 
@@ -1314,7 +1313,7 @@ existing `BadRequestError`.
   (Zod, Valibot, ArkType or hand-written; originally `ZodType<T>`)
 * ✅ ~~ValidationException~~ — `ValidationError`, `src/errors/ValidationError.ts`
   (naming departure from this task's original wording, deliberate - see
-  `doc/features/VALIDATION.md` §2.3/§8)
+  `doc/features/03_Request_Validation.md` §2.2)
 * ✅ Automatic 400 responses — thrown `ValidationError` goes through
   Empire's existing `HttpError`/`sendErrorResponse.ts` pipeline unchanged,
   with an additive `details` field in the JSON response
@@ -1406,7 +1405,7 @@ Phase 10 build, not as a separate "advanced" phase:
   erases; the only way to get them back is `experimentalDecorators` +
   `emitDecoratorMetadata`, needing the `reflect-metadata` polyfill as a
   runtime dependency — directly against the zero-dependency constraint.
-  See `doc/features/DEPENDENCY_INJECTION.md`'s guardrails section for the
+  See `doc/features/02_Dependency_Injection.md`'s dependency stance (§1.4) for the
   full reasoning. Explicit-token wiring (list the tokens by hand, let the
   container instantiate) remains possible without a dependency if this
   phase is ever picked back up, and would pair naturally with Phase 14's
@@ -1418,7 +1417,7 @@ Phase 10 build, not as a separate "advanced" phase:
 
 CORS is implemented - a plain middleware via the existing `app.use()`,
 no new `Empire.ts` method, zero new dependency. Full design in
-`doc/features/CORS.md`. The rest of this phase's tasks have no design
+`doc/features/04_CORS_Compliance.md`. The rest of this phase's tasks have no design
 doc yet and remain unstarted.
 
 ### Tasks
@@ -1426,7 +1425,7 @@ doc yet and remain unstarted.
 * Compression — expanded into its own Phase 20
 * ✅ CORS middleware — `createCorsMiddleware()`,
   `src/middleware/CorsMiddleware.ts`, `CorsOptions.ts`, `CorsPolicy.ts`,
-  `CorsConfig.ts`; full design and decisions log in `doc/features/CORS.md`
+  `CorsConfig.ts`; full design and build steps in `doc/features/04_CORS_Compliance.md`
 * Response caching
 * Request size limits
 * Multipart uploads
@@ -1550,7 +1549,8 @@ stays API-only (controllers without a V) - not resolved yet.
 ## Phase 23 — Simple Load Balancer
 
 Explicitly a learning/local-dev feature, not production-grade. Design:
-`doc/features/Loadbalancer-v1.md`. The v1 slice - round robin,
+`doc/features/05_Loadbalancer_Core_L7.md` (core) and
+`doc/features/06_Loadbalancer_Least_Conn.md` (least connections). The v1 slice - round robin,
 backends that register themselves and hold a lease, and a live three.js
 dashboard with per-backend drill-down - is built. It did not need Phase 21
 after all: only least connections needs live in-flight counts, and

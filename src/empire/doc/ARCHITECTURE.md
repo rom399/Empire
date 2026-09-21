@@ -7,7 +7,7 @@ built-in `http` module. Routing, middleware, the HTTP layer, the DI container an
 load balancer are all zero-dependency, and so is `src/validation/` (Phase 11): it
 accepts any Standard Schema validator (Zod, Valibot, ArkType or a hand-written one), so the
 validator is the application's own dependency, never Empire's - see
-`doc/features/REMOVE_ZOD.md` for the design and `doc/features/VALIDATION.md` for the original.
+`doc/features/03_Request_Validation.md` for the design.
 The design is inspired by ASP.NET Core — middleware pipelines, dependency
 injection, strongly-typed context, and a clean separation of concerns.
 
@@ -50,7 +50,7 @@ empire/
 │   ├── middleware/
 │   │   ├── LoggerMiddleware.ts     # createLoggerMiddleware(logger) factory
 │   │   ├── CorsOptions.ts          # CORS config interface (Phase 16) — see
-│   │   │                           # doc/features/CORS.md for the full design
+│   │   │                           # doc/features/04_CORS_Compliance.md for the full design
 │   │   ├── CorsPolicy.ts           # One { match, options } entry in a multi-policy CorsConfig
 │   │   ├── CorsConfig.ts           # CorsOptions | { policies, fallback? }
 │   │   ├── CorsMiddleware.ts       # createCorsMiddleware() — origin/preflight/credentials/Vary
@@ -74,7 +74,7 @@ empire/
 │   │   ├── RouteMatcher.ts         # Segment-based path matching, extracts :params
 │   │   └── Router.ts               # Route registration and request dispatch
 │   ├── di/                         # Dependency injection container (Phase 10) — see
-│   │   │                           # doc/features/DEPENDENCY_INJECTION.md for the full design
+│   │   │                           # doc/features/02_Dependency_Injection.md for the full design
 │   │   ├── ServiceToken.ts         # Symbol-based token type + createToken()
 │   │   ├── Lifetime.ts             # Singleton / Scoped / Transient enum
 │   │   ├── Resolver.ts             # resolve<T>(token): Promise<T> contract
@@ -85,7 +85,7 @@ empire/
 │   │   ├── ServiceScope.ts         # Per-request scope — resolve(), dispose()
 │   │   └── Disposable.ts           # Disposable interface + isDisposable() type guard
 │   ├── validation/                 # Schema-based validation (Phase 11) — see
-│   │   │                           # doc/features/VALIDATION.md for the full design
+│   │   │                           # doc/features/03_Request_Validation.md for the full design
 │   │   ├── validate.ts             # Wraps a handler with body/query/params validation
 │   │   ├── ValidationSchemas.ts    # { body?, query?, params? } Standard Schema validators accepted by validate()
 │   │   ├── Validated.ts            # { body, query, params } passed to the wrapped handler
@@ -93,7 +93,7 @@ empire/
 │   │   └── standard/               # StandardSchemaV1 and its supporting types - copied from the
 │   │                               # spec (standardschema.dev), so no package dependency is needed
 │   ├── loadbalancing/              # Layer-7 load balancer (Phase 23) — see
-│   │   │                           # doc/features/Loadbalancer-v1.md for the full design
+│   │   │                           # doc/features/05_Loadbalancer_Core_L7.md for the full design
 │   │   ├── Backend.ts, BackendInfo.ts # What a backend is - shared by everything below
 │   │   ├── isLoopbackAddress.ts    # Peer-address check shared by registration/ and dashboard/
 │   │   ├── backends/               # Who is eligible
@@ -204,16 +204,18 @@ empire/
 ├── doc/
 │   ├── ARCHITECTURE.md             # This file
 │   └── features/                   # One doc per in-flight or completed feature build
-│       ├── DEPENDENCY_INJECTION.md # Full DI design: tokens, lifetimes, scoping, disposal,
-│       │                           # graceful shutdown, decisions log
-│       ├── VALIDATION.md           # Full validation design: the Zod dependency decision,
-│       │                           # validate() wrapper, ValidationError, decisions log
-│       ├── REMOVE_ZOD.md           # Dropping Zod: Standard Schema in place of ZodType, a hand-written
-│       │                           # registration validator, decisions log
-│       ├── CORS.md                 # Full CORS design: preflight vs. Router's existing OPTIONS
-│       │                            # handling, credentials/wildcard guard, multi-policy, decisions log
-│       └── Loadbalancer-v1.md      # Full load balancer design: leases, strategy seam, streaming
-│                                    # proxy, route templates, the 3D dashboard, decisions log
+│       ├── 00-template-blueprint.md   # The master template every feature doc below follows
+│       ├── 01_Core_Routing_Pipeline.md # Core: request lifecycle, middleware pipeline, Router, Context,
+│       │                               # errors, request bodies, static files and SPA fallback, build steps
+│       ├── 02_Dependency_Injection.md # Full DI design: tokens, lifetimes, scoping, disposal,
+│       │                              # graceful shutdown, build steps and tests
+│       ├── 03_Request_Validation.md # Full validation design: validate() over Standard Schema, the
+│       │                            # ValidationError response, dropping Zod, build steps and tests
+│       ├── 04_CORS_Compliance.md   # Full CORS design: preflight vs. Router's existing OPTIONS
+│       │                            # handling, credentials/wildcard guard, multi-policy, build steps and tests
+│       ├── 05_Loadbalancer_Core_L7.md  # Load balancer core: leases, strategy seam, streaming proxy,
+│       │                               # route templates, the 3D dashboard, round robin
+│       └── 06_Loadbalancer_Least_Conn.md # Least connections: the in-flight source, the one-monitor guard
 │
 ├── scripts/
 │   └── run-examples.ts             # Smoke-tests every examples/ app — run via `npm run examples`,
@@ -389,7 +391,7 @@ clean, typed API. Passed to every route handler and every middleware.
 Any method added after v1 must be additive only (no signature changes, no
 removals). `ctx.services` was the one deliberately deferred exception,
 added in Phase 10 (DI-6) as a `Resolver` backed by a per-request
-`ServiceScope` — see `doc/features/DEPENDENCY_INJECTION.md`.
+`ServiceScope` — see `doc/features/02_Dependency_Injection.md`.
 
 **Request properties:**
 
@@ -655,7 +657,7 @@ itself use this signature.
 |------|--------|-----------|
 | `src/middleware/LoggerMiddleware.ts` | `createLoggerMiddleware(logger)` | Returns a middleware that logs `METHOD /path` through the given `ILogger` |
 | `src/middleware/RouteHeaderMiddleware.ts` | `createRouteHeaderMiddleware()` | Opt-in, backend-side. Adds `X-Empire-Route: <template>` to responses whose request matched a route, by wrapping `res.writeHead` (the route is only known after `Router` runs, i.e. after `next()`). Exposes route structure, so only enable it on backends a load balancer alone talks to |
-| `src/middleware/CorsMiddleware.ts` | `createCorsMiddleware(config)` | Returns a middleware handling CORS: origin allowlisting, preflight short-circuit, credentials, `allowedHeaders`/`exposedHeaders`, `Vary: Origin`, and optional per-path policies — full design in `doc/features/CORS.md` |
+| `src/middleware/CorsMiddleware.ts` | `createCorsMiddleware(config)` | Returns a middleware handling CORS: origin allowlisting, preflight short-circuit, credentials, `allowedHeaders`/`exposedHeaders`, `Vary: Origin`, and optional per-path policies — full design in `doc/features/04_CORS_Compliance.md` |
 
 ---
 
@@ -664,7 +666,8 @@ itself use this signature.
 A small layer-7 reverse proxy - a learning and local-development tool,
 not a production edge. Everything is a plain middleware or class
 registered through the existing `app.use()`; `Empire.ts` did not change.
-Full design: `doc/features/Loadbalancer-v1.md`.
+Full design: `doc/features/05_Loadbalancer_Core_L7.md` (core slice) and
+`doc/features/06_Loadbalancer_Least_Conn.md` (least connections).
 
 ```
 client -> [ dashboard | registration endpoint | load balancer ] -> backend
@@ -779,8 +782,8 @@ URL, so a query param intended as a number (`?page=2`) arrives as the
 string `"2"` — schemas validating them need `z.coerce.number()` rather
 than `z.number()`, or a well-formed request fails validation.
 
-Full design and the decisions log live in `doc/features/VALIDATION.md`; the later move from Zod
-to Standard Schema is in `doc/features/REMOVE_ZOD.md`.
+Full design, including the move from Zod to Standard Schema, is in
+`doc/features/03_Request_Validation.md`.
 
 ---
 
@@ -810,7 +813,7 @@ have been moved into the Resolved list. Two genuinely open items remain:
 | Issue | Impact | Plan |
 |-------|--------|------|
 | Only one SPA fallback per server | Can't serve two different single-page apps from one `Empire` instance | Not currently needed; `Router.setFallback()` would need to become a list with its own matching logic if this comes up |
-| No route-scoped/path-scoped middleware - every registered middleware runs for every request, unconditionally, before routing | Can't restrict a middleware to e.g. `/admin/*` without hand-rolling path checks inside it. `examples/08-authentication` already does this by hand; `doc/features/CORS.md` §2.6 does the same thing again, specifically for per-path CORS policies, rather than wait for a real fix | Tracked in `PLAN.md` Phase 3 ("Route-level middleware", remaining, unstarted). A real fix changes `Empire.handleRequest()`'s core dispatch model - the middleware loop would need to become path-aware, not just another addition wrapped around the existing pipeline the way DI, Validation, and CORS all were |
+| No route-scoped/path-scoped middleware - every registered middleware runs for every request, unconditionally, before routing | Can't restrict a middleware to e.g. `/admin/*` without hand-rolling path checks inside it. `examples/08-authentication` already does this by hand; `doc/features/04_CORS_Compliance.md` §2.3 (rule 8) does the same thing again, specifically for per-path CORS policies, rather than wait for a real fix | Tracked in `PLAN.md` Phase 3 ("Route-level middleware", remaining, unstarted). A real fix changes `Empire.handleRequest()`'s core dispatch model - the middleware loop would need to become path-aware, not just another addition wrapped around the existing pipeline the way DI, Validation, and CORS all were |
 
 **Resolved** (kept here for history — see `PLAN.md` for current status):
 - ~~Routing lived in `Empire.ts`~~ — extracted to `src/routing/Router.ts`
@@ -824,7 +827,7 @@ have been moved into the Resolved list. Two genuinely open items remain:
 - ~~No error handling around the middleware pipeline (FINDING 3)~~ — `Empire.handleRequest()` now catches and maps errors, see PLAN.md Phase 9.3
 - ~~`next()` not guarded against double invocation (FINDING 4)~~ — recursive `dispatch()` with a one-shot `next()`, see PLAN.md Phase 9.3
 - ~~`ctx.body()` not cached (FINDING 6)~~ — memoized as a promise, see PLAN.md Phase 9.3
-- ~~Only `GET` and `POST` implemented~~ - `PUT`, `PATCH`, `DELETE`, and `OPTIONS` all added, see `doc/features/MISSING_HTTP_VERBS.md`
+- ~~Only `GET` and `POST` implemented~~ - `PUT`, `PATCH`, `DELETE`, and `OPTIONS` all added, see `doc/features/01_Core_Routing_Pipeline.md` (rule 8)
 - ~~`ctx.body()` has no size cap (FINDING 7)~~ - configurable `maxBodySize`, rejects with 413 as the limit is crossed, see PLAN.md Phase 9.3
 - ~~`sendFile()` only resolved on the response's `"finish"` event (FINDING 8)~~ - now also settles on `"close"`, so a client aborting mid-download no longer leaks the read stream, see PLAN.md Phase 9.3
 - ~~Static files never checked `req.method` (FINDING 9)~~ - `StaticFileHandler` now checks for `HEAD` and skips opening a read stream entirely, see PLAN.md Phase 9.3
@@ -855,9 +858,8 @@ Planned build order after CORS (version 0.17.0 above), tracked as
 5. **Simple load balancer** - Phase 23, explicitly a learning/local-dev
    feature, not production-grade. The v1 slice is built (round robin,
    self-registering backends, the 3D dashboard - see the Load Balancer
-   section above); weighted round robin, least connections and Layer 7
-   header-based routing follow as new strategies against the same seam,
-   with least connections needing live in-flight counts
+   section above) and so is least connections; weighted round robin and
+   Layer 7 header-based routing follow as new strategies against the same seam
 
 Both design docs referenced above (items 1 and 2) do not exist in this
 repository as of this writing - the paths shown here use

@@ -4,7 +4,7 @@
  * Demonstrates createCorsMiddleware() (src/middleware/CorsMiddleware.ts),
  * wrapping requests the same way createLoggerMiddleware(logger) does - no
  * changes to Router or Context needed to add this. See
- * doc/features/CORS.md for the full design.
+ * doc/features/04_CORS_Compliance.md for the full design.
  *
  * - A cross-origin GET only gets a readable response because
  *   Access-Control-Allow-Origin is set for the configured origin

@@ -382,7 +382,7 @@ request body, query string, and/or route params, using any validator that
 implements [Standard Schema](https://standardschema.dev) - [Zod](https://zod.dev), Valibot, ArkType, or one
 you write by hand. Empire depends on none of them: you install the one you want
 (`npm install zod`), and Empire relies only on the small interface they all share
-(see [`doc/features/REMOVE_ZOD.md`](doc/features/REMOVE_ZOD.md) for the design).
+(see [`doc/features/03_Request_Validation.md`](doc/features/03_Request_Validation.md) for the design).
 It wraps a handler the same way `createLoggerMiddleware(logger)` wraps a
 middleware, so it needs no changes to `Router` or `Context`.
 
@@ -486,7 +486,7 @@ See `examples/10-validation` for a runnable version covering body, query
 
 `createCorsMiddleware()` wraps requests with cross-origin header logic -
 registered via the same `app.use()`, needing no changes to `Router` or
-`Context` (see [`doc/features/CORS.md`](doc/features/CORS.md) for the
+`Context` (see [`doc/features/04_CORS_Compliance.md`](doc/features/04_CORS_Compliance.md) for the
 full design):
 
 ```ts
@@ -538,7 +538,7 @@ multi-policy form together.
 
 A small layer-7 reverse proxy, built from the same pieces as everything
 else - plain middleware registered through `app.use()`, nothing added to
-`Empire.ts` (see [`doc/features/Loadbalancer-v1.md`](doc/features/Loadbalancer-v1.md)
+`Empire.ts` (see [`doc/features/05_Loadbalancer_Core_L7.md`](doc/features/05_Loadbalancer_Core_L7.md)
 for the full design). **It is a learning and local-development tool, not a
 production edge:** no TLS, no HTTP/2, no WebSocket upgrades, no retries, no
 active health checks.
@@ -785,7 +785,7 @@ await app.stop();  // resolves once it has shut down
 3. Anything still open after `shutdownTimeoutMs` (default 10 seconds) is
    force-closed, so one stuck request can't hang shutdown forever.
 4. Any singletons registered via `EmpireOptions.services` (see
-   [Dependency Injection](doc/features/DEPENDENCY_INJECTION.md)) are
+   [Dependency Injection](doc/features/02_Dependency_Injection.md)) are
    disposed, in reverse construction order.
 
 Override the timeout per app:

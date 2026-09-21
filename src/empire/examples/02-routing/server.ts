@@ -6,7 +6,7 @@
  * - Query strings via ctx.query
  * - A full REST-style user API: GET (list/single), POST (create), PUT (full
  *   replace), PATCH (partial update), DELETE (remove) — see doc/features/
- *   MISSING_HTTP_VERBS.md for how PUT/PATCH/DELETE/OPTIONS were added
+ *   01_Core_Routing_Pipeline.md (rule 8) for how PUT/PATCH/DELETE/OPTIONS work
  * - Overlapping routes, registered literal-first so the literal route wins
  *   over a colliding :param route — see the "Routing" section of the README
  *

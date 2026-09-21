@@ -78,7 +78,7 @@ export class ServiceCollection {
      * recoverable runtime conditions - a try/catch upstream could otherwise
      * swallow a normal throw and let the server boot with a broken
      * container. Crashing the process is deliberate; see
-     * doc/features/DEPENDENCY_INJECTION.md section 2.4.
+     * doc/features/02_Dependency_Injection.md section 2.3, rules 2 and 3.
      */
     private crash(message: string): never {
         console.error(`FATAL: ${message}`);

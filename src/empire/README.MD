@@ -467,7 +467,7 @@ fewest requests in flight. The dashboard shows it all live.
 This is not mirrored in `package-example/` yet. The full walkthrough is in
 [README_DEVELOPMENT.MD](https://github.com/rom399/Empire/blob/main/src/empire/README_DEVELOPMENT.MD)
 and the design in
-[`doc/features/Loadbalancer-v1.md`](https://github.com/rom399/Empire/blob/main/src/empire/doc/features/Loadbalancer-v1.md).
+[`doc/features/05_Loadbalancer_Core_L7.md`](https://github.com/rom399/Empire/blob/main/src/empire/doc/features/05_Loadbalancer_Core_L7.md).
 
 ## What this proves
 

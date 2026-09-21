@@ -4,7 +4,7 @@ import { TestLogger } from "../fixtures/services/TestLogger";
 
 /**
  * Real-server coverage for PUT/PATCH/DELETE/OPTIONS (Missing HTTP Verbs —
- * see doc/MISSING_HTTP_VERBS.md). Router.test.ts already proves basic
+ * see doc/features/01_Core_Routing_Pipeline.md, rule 8). Router.test.ts already proves basic
  * dispatch works via mocks; this proves the same verbs work end to end
  * with real request bodies, real app-level logic, and real response
  * headers over an actual socket, the way an actual REST resource would

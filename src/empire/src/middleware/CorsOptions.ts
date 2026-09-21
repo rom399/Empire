@@ -1,5 +1,5 @@
 /**
- * Configuration for createCorsMiddleware(). See doc/features/CORS.md §2.3
+ * Configuration for createCorsMiddleware(). See doc/features/04_CORS_Compliance.md §2.2
  * for the full design rationale behind each field's default.
  */
 export interface CorsOptions {
@@ -30,9 +30,9 @@ export interface CorsOptions {
     exposedHeaders?: string[];
 
     /**
-     * Sets Access-Control-Allow-Credentials - see doc/features/CORS.md
-     * §2.4 for the wildcard-origin interaction. Combining this with the
-     * literal origin: "*" is rejected at creation time (§2.4).
+     * Sets Access-Control-Allow-Credentials - see doc/features/04_CORS_Compliance.md
+     * §2.3 (rule 6) for the wildcard-origin interaction. Combining this with the
+     * literal origin: "*" is rejected at creation time (rule 6).
      */
     credentials?: boolean;
 

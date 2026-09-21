@@ -7,7 +7,7 @@ import { createMockRequest, createMockResponse } from "../../fixtures/http/MockH
 /**
  * Context.route - the matched route pattern, as opposed to the concrete
  * request path - is what lets the load balancer's dashboard group
- * /users/1 and /users/2 as one endpoint. Covers doc/features/Loadbalancer-v1.md §2.7a.
+ * /users/1 and /users/2 as one endpoint. Covers doc/features/05_Loadbalancer_Core_L7.md, rule 12 (route templates).
  */
 describe("Router - Context.route", () => {
 

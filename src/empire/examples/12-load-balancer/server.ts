@@ -2,7 +2,7 @@
  * 12 - Load balancer (the balancer itself; backend.ts and traffic.ts are its companions)
  *
  * Empire acting as a small layer-7 reverse proxy - see
- * doc/features/Loadbalancer-v1.md for the full design. A learning and
+ * doc/features/05_Loadbalancer_Core_L7.md for the full design. A learning and
  * local-development tool, not a production edge: no TLS, no HTTP/2, no
  * WebSocket upgrades, no retries.
  *

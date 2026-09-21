@@ -18,8 +18,8 @@
  *   entirely, but the plumbing (a real socket, real JSON parsing, a real
  *   IHttpClient behind an interface) is identical either way.
  *
- * See doc/features/DEPENDENCY_INJECTION.md sections 4.2 and 4.3 for the
- * design this follows.
+ * See doc/features/02_Dependency_Injection.md (section 2.1 and Step 4) for
+ * the design this follows.
  *
  * Run: npx tsx examples/09-dependency-injection/server.ts
  * Open: http://localhost:8009

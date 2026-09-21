@@ -10,7 +10,7 @@ export const ROUTE_HEADER = "X-Empire-Route";
  * your route structure to whoever can see responses, which is right for a
  * backend that only the balancer talks to, and not something to switch on
  * for an app that faces the internet directly. Pair it with the
- * balancer's dashboard - see doc/features/Loadbalancer-v1.md §2.7a.
+ * balancer's dashboard - see doc/features/05_Loadbalancer_Core_L7.md, rule 12 (route templates).
  *
  * The route is only known once Router has run, which is after this
  * middleware has called next() - and by the time next() returns, headers

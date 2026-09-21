@@ -4,11 +4,11 @@ import { Context } from "../../../src/http/Context";
 import { createMockRequest, createMockResponse, MockResponse } from "../../fixtures/http/MockHttp";
 
 /**
- * Covers doc/features/CORS.md §5's test list. Two entries there conflict
+ * Covers doc/features/04_CORS_Compliance.md Step 2's test list. Two entries in its original design conflict
  * ("credentials: true always echoes the specific request's Origin ... even
  * when origin is configured as '*'" vs. the very next entry, "throws
  * synchronously at creation time" for that exact combination) - the crash
- * guard (§2.4) is the one actually implemented, so the credentials test
+ * guard (rule 6) is the one actually implemented, so the credentials test
  * below uses an array config instead of the literal wildcard.
  */
 describe("createCorsMiddleware", () => {

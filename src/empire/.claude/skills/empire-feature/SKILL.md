@@ -12,7 +12,7 @@ Follow this procedure when adding a new feature to Empire (a new class, a new ph
 - JSDoc on every public class, method, and property - explain *why*, not what.
 - No magic numbers or strings - name them as constants.
 - Constructor injection for dependencies - never a service locator.
-- Do not add a new npm dependency without the user explicitly agreeing to it first. Empire has no runtime dependencies and keeps no validation library in the repository, not even as a dev dependency (Zod was removed; `validate()` accepts any Standard Schema validator the user brings - see `doc/features/REMOVE_ZOD.md`). That is a real design decision, not an oversight to work around.
+- Do not add a new npm dependency without the user explicitly agreeing to it first. Empire has no runtime dependencies and keeps no validation library in the repository, not even as a dev dependency (Zod was removed; `validate()` accepts any Standard Schema validator the user brings - see `doc/features/03_Request_Validation.md`). That is a real design decision, not an oversight to work around.
 
 ## 2. Write unit tests in `tests/unit/`, mirroring `src/`'s structure
 
@@ -33,4 +33,4 @@ Chains `tsc --noEmit`, `vitest run`, and the example smoke-test (`scripts/run-ex
 
 ## 5. Update docs
 
-Substantial features get a design doc under `doc/features/` - see `DEPENDENCY_INJECTION.md` and `VALIDATION.md` for the template (Context & Goals, Design, Build order/milestones, Examples, Tests, Guardrails, Decisions log). Also update `doc/ARCHITECTURE.md`'s directory tree and relevant section, `PLAN.md`'s phase checklist, and `README.MD`'s feature list / Examples table if the feature is user-facing. This repo has a history of docs going stale the moment nobody deliberately updates them after the code ships - don't let that happen here too.
+Substantial features get a design doc under `doc/features/` - start from `00-template-blueprint.md` (Context & Architectural Goals, Design & API Contracts, Iterative Build Steps & Test Strategy) and see `02_Dependency_Injection.md` for a finished example. Also update `doc/ARCHITECTURE.md`'s directory tree and relevant section, `PLAN.md`'s phase checklist, and `README.MD`'s feature list / Examples table if the feature is user-facing. This repo has a history of docs going stale the moment nobody deliberately updates them after the code ships - don't let that happen here too.
