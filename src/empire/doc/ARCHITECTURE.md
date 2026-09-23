@@ -203,7 +203,9 @@ empire/
 │
 ├── doc/
 │   ├── ARCHITECTURE.md             # This file
-│   └── features/                   # One doc per in-flight or completed feature build
+│   └── features/                   # One doc per in-flight or completed feature build,
+│                                    # linked from README_DEVELOPMENT.MD and README.MD rather
+│                                    # than duplicated into them
 │       ├── 00-template-blueprint.md   # The master template every feature doc below follows
 │       ├── 01_Core_Routing_Pipeline.md # Core: request lifecycle, middleware pipeline, Router, Context,
 │       │                               # errors, request bodies, static files and SPA fallback, build steps
@@ -593,31 +595,9 @@ version of the fallback fired for any method, and `POST /api/users` (with
 no POST handler registered) incorrectly returned the SPA shell with a `200`
 instead of a `404`.
 
-```ts
-app.useStaticFiles("./dist", { spaFallback: true });
-
-app.get("/api/users", (ctx) => {
-    ctx.json({ users: [] });
-});
-```
-
-| Request | Result |
-|---------|--------|
-| `GET /` | Real file — `dist/index.html`, served directly |
-| `GET /about` | No file, no route → fallback → `dist/index.html` |
-| `GET /api/users` | Matched route → JSON, not the fallback |
-| `GET /assets/main.jsx` | Real file, not the fallback |
-| `POST /api/users` (no POST handler registered) | Real 404 — fallback does not apply to non-GET |
-| `POST /about` (unmatched, non-GET) | Real 404 — fallback does not apply to non-GET |
-
-`examples/06-react-app` is a runnable version of all six cases, and a real
-React + React Router app (`BrowserRouter`, not hash-based routing) rather
-than a plain-HTML stand-in — React, ReactDOM, and React Router load from a
-CDN, with Babel Standalone transpiling the JSX in the browser, so it needs
-no npm install or build step. `BrowserRouter` is deliberate: it's the router
-mode that actually depends on server-side SPA fallback, since navigating
-directly to `/about` (or refreshing on it) sends a real `GET /about` to
-Empire.
+Usage, the resulting request/response table, and `examples/06-react-app`
+(a real React + React Router app exercising all of this) are documented in
+README_DEVELOPMENT.MD's "Static Files" section rather than repeated here.
 
 ---
 
@@ -748,19 +728,9 @@ schema-based validation of the request body, query string, and/or route
 params, the same way `createLoggerMiddleware(logger)` wraps a middleware
 around a dependency. It needs zero changes to `Router`'s registration
 methods or `Context`'s frozen API — a route registers a `validate(...)`-wrapped
-handler exactly like any other:
-
-```ts
-const createUserSchema = z.object({
-    name: z.string().min(1),
-    email: z.string().email(),
-});
-
-app.post("/users", validate({ body: createUserSchema })(async (ctx, { body }) => {
-    // body.name and body.email are already validated and typed
-    ctx.status(201).json(body);
-}));
-```
+handler exactly like any other. Usage examples (Zod and hand-written) are in
+README_DEVELOPMENT.MD's and README.MD's "Validation" sections rather than
+repeated here.
 
 A failing schema throws `ValidationError`, which `Router` already catches
 through the same pipeline as any other `HttpError` — no separate error

@@ -7,42 +7,28 @@
 
 [![CI](https://github.com/rom399/Empire/actions/workflows/ci.yml/badge.svg)](https://github.com/rom399/Empire/actions/workflows/ci.yml)
 
-Empire is a lightweight TypeScript web framework built from scratch using Node.js.
+![The load balancer example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](https://raw.githubusercontent.com/rom399/Empire/main/src/empire/doc/images/load-balancer-example.gif)
 
-The goal of the project is to understand how modern web frameworks such as Express, Koa, Fastify, and ASP.NET Core work internally by implementing the core features ourselves.
+Empire is a lightweight TypeScript HTTP framework built from scratch on
+Node's `http` module, with zero runtime dependencies - the goal is to
+understand how frameworks like Express, Koa, Fastify, and ASP.NET Core
+work internally by implementing the core pieces ourselves: routing, a
+middleware pipeline, a typed `Context`, dependency injection, schema-based
+validation, CORS, and centralized error handling. `empire-ts` also
+exports a small layer-7 load balancer, built from those same pieces
+rather than bolted on separately - the GIF above shows its live
+dashboard: backends registering themselves, taking traffic, and one
+deregistering and rejoining, with no config to edit. The framework's
+features are covered first below, then the load balancer in depth, then
+how to test, build, and navigate the source itself.
 
-## Current Features
+## Empire Framework
 
-* HTTP server built on Node's `http` module, with configurable host and port
-* Promise-based `start()` and `stop()` lifecycle - `stop()` closes idle
-  connections immediately, gives in-flight requests up to a configurable
-  timeout to finish, then force-closes stragglers and disposes any
-  registered dependency-injected singletons
-* Routing across all six HTTP methods, with `:param` capture and automatic HEAD and OPTIONS handling
-* Middleware pipeline executing in registration order (`app.use()`)
-* Static file serving, with optional URL prefixes and SPA fallback
-* A dependency injection container - `addSingleton`/`addScoped`/`addTransient`,
-  per-request scoping via `ctx.services`, disposal
-* Schema-based request validation (body, query, route params) via `validate()`,
-  accepting any Standard Schema validator (Zod, Valibot, ArkType, or your own) -
-  Empire itself keeps zero runtime dependencies
-* CORS support via `createCorsMiddleware()` - origin/method/header
-  allowlisting, preflight handling, credentials, and per-path policies
-* A small layer-7 load balancer (round robin, backends that register
-  themselves and hold a lease, a live three.js dashboard with per-backend
-  drill-down) - a learning and local-development tool, not a production edge
-* Centralized error handling built around `HttpError`
-* Configurable request body size limit
-* Pluggable logging abstraction (`ILogger`), with a built-in console logger
-* Written in TypeScript throughout
-
-## Installation
+### Getting Started
 
 ```bash
 npm install
 ```
-
-## Running
 
 There is no standalone server file in this project; `npm start` runs
 `examples/01-basic-server/server.ts`:
@@ -51,14 +37,11 @@ There is no standalone server file in this project; `npm start` runs
 npm start
 ```
 
-Any other example can be run directly with `tsx`. See the Examples section
-below for what each one demonstrates.
+Any other example can be run directly with `tsx`:
 
 ```bash
 npx tsx examples/02-routing/server.ts
 ```
-
-## Example
 
 ```ts
 import { Empire } from "./src/Empire";
@@ -70,13 +53,32 @@ async function main() {
         port: 8008
     });
 
+    app.get("/", (ctx) => {
+        ctx.html(`
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>Empire</title>
+                </head>
+                <body>
+                    <h1>Welcome to Empire</h1>
+                    <p>A lightweight TypeScript web framework.</p>
+                </body>
+            </html>
+        `);
+    });
+
     await app.start();
 }
 
 main();
 ```
 
-## Routing
+If you want to modify empire-ts itself rather than just run the
+examples, the Testing and Project Structure sections further down cover
+running the suite and finding your way around the source.
+
+### Routing
 
 Routes are registered with `app.get()` and `app.post()`, with `:param`
 segments captured into `ctx.params`:
@@ -163,9 +165,11 @@ app.get("/users/:id", (ctx) => ctx.text("param"));
 ```
 
 **Rule of thumb:** register more specific (literal) routes before more
-general (parameterized) ones that could overlap them.
+general (parameterized) ones that could overlap them. The rationale for
+why this is a fixed rule rather than something Empire resolves for you
+is in [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
 
-## Static Files
+### Static Files
 
 `app.useStaticFiles(root)` serves files from a directory, matched against
 the request path before routing runs:
@@ -195,13 +199,42 @@ falls through instead of erroring.
 
 Pass `{ spaFallback: true }` to serve `root/index.html` for any unmatched
 `GET` request instead of a `404` - useful for single-page apps using
-client-side routing. See `examples/06-react-app` for the full behavior
-set alongside API routes.
+client-side routing. This can't be done purely inside the static-file
+middleware: middleware runs before routing, so by the time it decides "no
+file matches this path," it has no way of knowing whether a route
+registered later in the pipeline will match the same path. Empire solves
+this by giving `Router` itself an optional fallback, invoked only once
+every registered route has had a chance to match and none did - which
+keeps routing authoritative and is why the fallback lives here rather
+than in the static-file handler. It's deliberately **GET-only**: a
+`POST`/`PUT`/`DELETE` to an unmatched path is almost always a genuine
+client error and should `404` loudly rather than silently return the
+HTML shell.
+
+```ts
+app.useStaticFiles("./dist", { spaFallback: true });
+
+app.get("/api/users", (ctx) => {
+    ctx.json({ users: [] });
+});
+```
+
+| Request | Result |
+|---------|--------|
+| `GET /` | Real file — `dist/index.html`, served directly |
+| `GET /about` | No file, no route → fallback → `dist/index.html` |
+| `GET /api/users` | Matched route → JSON, not the fallback |
+| `POST /api/users` (no POST handler registered) | Real 404 — fallback does not apply to non-GET |
 
 See `examples/04-static-files` for a runnable version of unprefixed and
-prefixed mounting side by side.
+prefixed mounting side by side, and `examples/06-react-app` for the SPA
+fallback alongside a real React + React Router app (`BrowserRouter`,
+which is what actually depends on server-side fallback, since navigating
+directly to `/about` sends a real `GET /about` to Empire). The full
+design rationale, including why this couldn't live in `StaticFileHandler`
+alone, is in [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
 
-## Request and Response Helpers
+### Request and Response Helpers
 
 Beyond `ctx.params` and `ctx.query`, `Context` exposes a few more request
 shorthands:
@@ -254,7 +287,7 @@ app.get("/report/download", async (ctx) => {
   `Content-Disposition: attachment` so the browser downloads it instead
   of displaying it. `filename` defaults to the file's own base name.
 
-## Cookies
+### Cookies
 
 ```ts
 app.post("/login", (ctx) => {
@@ -282,7 +315,7 @@ response can set more than one cookie. `options` mirrors ASP.NET Core's
 `ctx.clearCookie(name)` is a shorthand for setting the same cookie with
 an already-expired date, which instructs the browser to delete it.
 
-## Middleware
+### Middleware
 
 Middleware can be registered using:
 
@@ -324,7 +357,11 @@ app.use(async (ctx, next) => {
 });
 ```
 
-## Error Handling
+See `examples/03-middleware` for a runnable version, showing
+`createLoggerMiddleware(logger)`, a short-circuiting auth-header check,
+and a custom timing middleware together.
+
+### Error Handling
 
 `HttpError` is the base class for an error that should become a specific
 HTTP response. Throw one from a route handler or a middleware with a status
@@ -375,7 +412,111 @@ response and no error body.
 See `examples/05-error-handling` for a runnable version of all of the above,
 including the always-500 `/crash` route.
 
-## Validation
+### Server Lifecycle
+
+```ts
+const app = new Empire({ host: "localhost", port: 8008 });
+
+await app.start(); // resolves once the server is listening
+await app.stop();  // resolves once it has shut down
+```
+
+`stop()` is a graceful shutdown, not a bare socket close:
+
+1. Idle keep-alive connections are closed immediately - they aren't
+   serving anything, so there is no reason to wait on them.
+2. The server stops accepting new connections; requests already in
+   flight are given time to finish naturally.
+3. Anything still open after `shutdownTimeoutMs` (default 10 seconds) is
+   force-closed, so one stuck request can't hang shutdown forever.
+4. Any singletons registered via `EmpireOptions.services` (see
+   Dependency Injection below) are disposed, in reverse construction
+   order.
+
+Override the timeout per app:
+
+```ts
+const app = new Empire({
+    host: "localhost",
+    port: 8008,
+    shutdownTimeoutMs: 5000
+});
+```
+
+**Empire does not register `SIGTERM`/`SIGINT` handlers itself** - `stop()`
+provides the shutdown mechanics, but deciding *when* to call it is left to
+your application. This is deliberate: a library registering process-wide
+signal handlers as a side effect of construction is surprising, and would
+actively cause problems here - many short-lived `Empire` instances (this
+project's own test suite creates dozens) would each add their own
+listener, leaking them and risking interference with, for example, a test
+runner's own `Ctrl+C` handling. Wire it up yourself, the same way every
+example in `examples/` does:
+
+```ts
+process.on("SIGINT", async () => {
+    app.logger.info("Shutting down...");
+
+    try {
+        await app.stop();
+        app.logger.info("Server stopped.");
+        process.exit(0);
+    } catch (err) {
+        app.logger.error("Error during shutdown", err);
+        process.exit(1);
+    }
+});
+```
+
+### Dependency Injection
+
+A hand-rolled container - no reflection, no decorators, just explicit
+registration. Services are registered on a `ServiceCollection` with one
+of three lifetimes, built into a root `ServiceProvider`, and passed to
+`Empire` via `EmpireOptions.services`:
+
+```ts
+import { Empire, ServiceCollection, createToken } from "./src/index";
+
+interface IUserRepository { findAll(): User[]; }
+const UserRepository = createToken<IUserRepository>("UserRepository");
+
+const services = new ServiceCollection();
+services.addSingleton(UserRepository, () => new InMemoryUserRepository());
+services.addScoped(UpstreamClient, (resolver) => new UpstreamClient(fetch));
+
+const app = new Empire({
+    host: "localhost",
+    port: 8009,
+    services: services.build(),
+});
+
+app.get("/users", async (ctx) => {
+    // ctx.services is undefined unless EmpireOptions.services was set
+    const repo = await ctx.services!.resolve(UserRepository);
+    ctx.json(repo.findAll());
+});
+```
+
+* **Singleton** - built once, shared by every request, disposed on
+  `app.stop()`.
+* **Scoped** - built once per request, resolved through `ctx.services`,
+  and disposed automatically once that request's response ends.
+* **Transient** - built fresh every time it's resolved.
+
+A service is disposed automatically if it implements `Disposable`
+(a `dispose()` method) - nothing extra to register. Constructor
+injection only: a factory receives a `Resolver` to pull its own
+dependencies from, never a service locator reached for arbitrarily.
+
+See `examples/09-dependency-injection` for a singleton in-memory
+repository backing three `/records` routes, and a scoped service that
+calls an "upstream" API over a real HTTP request via `ctx.services`. Full
+design - tokens, lifetimes, scoping, disposal ordering, and a known gap
+around root-level transient disposal - is in
+[`doc/features/02_Dependency_Injection.md`](doc/features/02_Dependency_Injection.md).
+
+### Validation
 
 `validate()` wraps a route handler with schema-based validation of the
 request body, query string, and/or route params, using any validator that
@@ -386,7 +527,7 @@ you write by hand. Empire depends on none of them: you install the one you want
 It wraps a handler the same way `createLoggerMiddleware(logger)` wraps a
 middleware, so it needs no changes to `Router` or `Context`.
 
-### Using Zod
+#### Using Zod
 
 Empire's own repository contains no validation library - not even as a dev dependency - so
 add Zod to *your* project first:
@@ -448,7 +589,7 @@ app.get("/search", validate({ query: searchSchema })(async (ctx, { query }) => {
 }));
 ```
 
-### Bring your own validator
+#### Bring your own validator
 
 Anything with a `~standard` property works, so a validator can be a few lines and no
 library at all. It returns either `{ value }` or `{ issues }`, and may be async:
@@ -482,7 +623,7 @@ returning issues is treated as a bug and answers `500`.
 See `examples/10-validation` for a runnable version covering body, query
 (with coercion), and route param validation together.
 
-## CORS
+### CORS
 
 `createCorsMiddleware()` wraps requests with cross-origin header logic -
 registered via the same `app.use()`, needing no changes to `Router` or
@@ -511,9 +652,10 @@ untouched.
 nothing beyond the browser's own CORS-safelisted headers is permitted or
 exposed, not a permissive reflect-back of whatever was requested.
 `credentials: true` always echoes the specific requesting `Origin` rather
-than `*`, and combining it with the literal `origin: "*"` throws
-synchronously at creation time, since browsers reject that combination
-outright.
+than `*`, and combining it with the literal `origin: "*"` is rejected at
+creation time (the middleware exits the process loudly, the same crash-loud
+pattern the DI container uses - see the design doc for why), since browsers
+reject that combination outright.
 
 A single call can also apply different policies by path, without Empire
 gaining real route-scoped middleware:
@@ -532,9 +674,111 @@ See `examples/11-cors` for a runnable version covering an allowed and a
 disallowed origin, a preflight with custom headers, credentials, and the
 multi-policy form together.
 
-## Load Balancer
+### Authentication
 
-![The load balancer example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](doc/images/load-balancer-example.gif)
+Empire does not ship authentication middleware. The framework owns the
+mechanical parts every application needs identically - parsing headers,
+rejecting malformed input, producing a correctly formed error response -
+but it cannot own the decision about what counts as a valid credential,
+since only the application knows about its own users, token format and
+storage. Writing this yourself is a small amount of code: middleware that
+throws `HttpError(401)` already produces a correct JSON response through
+the pipeline described above.
+
+```ts
+const authMiddleware: Middleware = (ctx, next) => {
+    const user = lookUpUser(ctx.headers.authorization);
+
+    if (!user) {
+        throw new HttpError(401, "Invalid or missing credentials");
+    }
+
+    ctx.state.user = user; // hand the identity to downstream handlers
+    return next();
+};
+```
+
+`ctx.state` is a `Record<string, unknown>` bag for exactly this: attaching
+data in a middleware for a route handler to read later. Reading it back
+requires narrowing the value yourself, since `state` has no way to know
+what any given application stores there.
+
+Two sharp edges worth knowing. First, Empire does not yet support
+per-route middleware, so an `app.use()`-registered auth middleware runs
+for every request; excluding a path (e.g. a health check) means having
+the middleware itself check `ctx.path` and skip a list of public paths.
+Second, a real implementation needs more than this shape covers -
+credentials stored hashed rather than in plain text, token expiry, and
+constant-time comparison to avoid timing attacks, none of which the
+framework can provide for you.
+
+See `examples/08-authentication` for a complete worked example, including
+the header parsing details (case-insensitive Bearer scheme matching,
+`WWW-Authenticate` on the 401) that are easy to get wrong.
+
+### Logging
+
+Empire provides a logging abstraction.
+
+```ts
+app.logger.info("Server starting");
+
+app.logger.error(
+    "Failed to start server",
+    err
+);
+```
+
+Custom loggers can be supplied by implementing the `ILogger` interface.
+
+```ts
+const app = new Empire({
+    host: "localhost",
+    port: 8008,
+    logger: new MyCustomLogger()
+});
+```
+
+### Request Body Size Limit
+
+Empire caps request bodies at 1MB by default. A request over the limit
+gets a `413` response as soon as it crosses the limit, instead of being
+buffered fully into memory first.
+
+```ts
+const app = new Empire({
+    host: "localhost",
+    port: 8008
+});
+```
+
+Pass `maxBodySize` (in bytes) to raise or lower the default:
+
+```ts
+const app = new Empire({
+    host: "localhost",
+    port: 8008,
+    maxBodySize: 10 * 1024 * 1024 // 10 MB
+});
+```
+
+The limit applies to `ctx.body()`, and therefore to `ctx.jsonBody()` and
+`ctx.form()` too, since both read the body through it:
+
+```ts
+app.post("/upload", async (ctx) => {
+    // Throws HttpError(413) automatically if the body is too large -
+    // no need to check the size yourself.
+    const data = await ctx.jsonBody();
+
+    ctx.json({ received: data });
+});
+```
+
+See `examples/07-body-size-limit` for a runnable version with a
+deliberately small limit so the 413 response is easy to trigger.
+
+## Load Balancer
 
 A small layer-7 reverse proxy, built from the same pieces as everything
 else - plain middleware registered through `app.use()`, nothing added to
@@ -702,166 +946,6 @@ traffic generator, with a scripted walkthrough in its header comment. Start the
 balancer as `server.ts least-connections` to compare the two strategies against the
 same backends.
 
-## Authentication
-
-Empire does not ship authentication middleware. The framework owns the
-mechanical parts every application needs identically - parsing headers,
-rejecting malformed input, producing a correctly formed error response -
-but it cannot own the decision about what counts as a valid credential,
-since only the application knows about its own users, token format and
-storage. Writing this yourself is a small amount of code: middleware that
-throws `HttpError(401)` already produces a correct JSON response through
-the pipeline described above.
-
-```ts
-const authMiddleware: Middleware = (ctx, next) => {
-    const user = lookUpUser(ctx.headers.authorization);
-
-    if (!user) {
-        throw new HttpError(401, "Invalid or missing credentials");
-    }
-
-    ctx.state.user = user; // hand the identity to downstream handlers
-    return next();
-};
-```
-
-`ctx.state` is a `Record<string, unknown>` bag for exactly this: attaching
-data in a middleware for a route handler to read later. Reading it back
-requires narrowing the value yourself, since `state` has no way to know
-what any given application stores there.
-
-Two sharp edges worth knowing. First, Empire does not yet support
-per-route middleware, so an `app.use()`-registered auth middleware runs
-for every request; excluding a path (e.g. a health check) means having
-the middleware itself check `ctx.path` and skip a list of public paths.
-Second, a real implementation needs more than this shape covers -
-credentials stored hashed rather than in plain text, token expiry, and
-constant-time comparison to avoid timing attacks, none of which the
-framework can provide for you.
-
-See `examples/08-authentication` for a complete worked example, including
-the header parsing details (case-insensitive Bearer scheme matching,
-`WWW-Authenticate` on the 401) that are easy to get wrong.
-
-## Logging
-
-Empire provides a logging abstraction.
-
-```ts
-app.logger.info("Server starting");
-
-app.logger.error(
-    "Failed to start server",
-    err
-);
-```
-
-Custom loggers can be supplied by implementing the `ILogger` interface.
-
-```ts
-const app = new Empire({
-    host: "localhost",
-    port: 8008,
-    logger: new MyCustomLogger()
-});
-```
-
-## Server Lifecycle
-
-```ts
-const app = new Empire({ host: "localhost", port: 8008 });
-
-await app.start(); // resolves once the server is listening
-await app.stop();  // resolves once it has shut down
-```
-
-`stop()` is a graceful shutdown, not a bare socket close:
-
-1. Idle keep-alive connections are closed immediately - they aren't
-   serving anything, so there is no reason to wait on them.
-2. The server stops accepting new connections; requests already in
-   flight are given time to finish naturally.
-3. Anything still open after `shutdownTimeoutMs` (default 10 seconds) is
-   force-closed, so one stuck request can't hang shutdown forever.
-4. Any singletons registered via `EmpireOptions.services` (see
-   [Dependency Injection](doc/features/02_Dependency_Injection.md)) are
-   disposed, in reverse construction order.
-
-Override the timeout per app:
-
-```ts
-const app = new Empire({
-    host: "localhost",
-    port: 8008,
-    shutdownTimeoutMs: 5000
-});
-```
-
-**Empire does not register `SIGTERM`/`SIGINT` handlers itself** - `stop()`
-provides the shutdown mechanics, but deciding *when* to call it is left to
-your application. This is deliberate: a library registering process-wide
-signal handlers as a side effect of construction is surprising, and would
-actively cause problems here - many short-lived `Empire` instances (this
-project's own test suite creates dozens) would each add their own
-listener, leaking them and risking interference with, for example, a test
-runner's own `Ctrl+C` handling. Wire it up yourself, the same way every
-example in `examples/` does:
-
-```ts
-process.on("SIGINT", async () => {
-    app.logger.info("Shutting down...");
-
-    try {
-        await app.stop();
-        app.logger.info("Server stopped.");
-        process.exit(0);
-    } catch (err) {
-        app.logger.error("Error during shutdown", err);
-        process.exit(1);
-    }
-});
-```
-
-## Request Body Size Limit
-
-Empire caps request bodies at 1MB by default. A request over the limit
-gets a `413` response as soon as it crosses the limit, instead of being
-buffered fully into memory first.
-
-```ts
-const app = new Empire({
-    host: "localhost",
-    port: 8008
-});
-```
-
-Pass `maxBodySize` (in bytes) to raise or lower the default:
-
-```ts
-const app = new Empire({
-    host: "localhost",
-    port: 8008,
-    maxBodySize: 10 * 1024 * 1024 // 10 MB
-});
-```
-
-The limit applies to `ctx.body()`, and therefore to `ctx.jsonBody()` and
-`ctx.form()` too, since both read the body through it:
-
-```ts
-app.post("/upload", async (ctx) => {
-    // Throws HttpError(413) automatically if the body is too large -
-    // no need to check the size yourself.
-    const data = await ctx.jsonBody();
-
-    ctx.json({ received: data });
-});
-```
-
-See `examples/07-body-size-limit` for a runnable version with a
-deliberately small limit so the 413 response is easy to trigger.
-
 ## Examples
 
 For developers extending Empire itself - each one imports the framework's
@@ -1009,54 +1093,26 @@ not silently ignored - `tests/fixtures/http/MockHttp.ts` shows the pattern.
 
 ```text
 empire/
-├── src/
-│   ├── Empire.ts
-│   ├── types.ts
-│   ├── http/          Context, CookieOptions
-│   ├── routing/        Route, RouteMatch, RouteMatcher, Router
-│   ├── middleware/      LoggerMiddleware, CorsMiddleware, CorsOptions,
-│   │                     CorsPolicy, CorsConfig, RouteHeaderMiddleware
-│   ├── static/          MimeTypes, StaticFileHandler and its option types
-│   ├── errors/          HttpError, BadRequestError, HttpErrorOptions,
-│   │                     ValidationError, ValidationIssue, sendErrorResponse
-│   ├── logging/         ILogger, ConsoleLogger
-│   ├── di/              ServiceCollection, ServiceProvider, ServiceScope,
-│   │                     ServiceToken, Lifetime, Disposable, and their
-│   │                     supporting types (Resolver, Factory, ServiceDescriptor)
-│   ├── validation/      validate(), ValidationSchemas, Validated
-│   └── loadbalancing/   The load balancer, in sub-folders: backends/ (registry),
-│                         strategy/, proxy/ (middleware, forwardRequest),
-│                         registration/ (endpoint and backend-side client),
-│                         monitoring/ (events, stats), dashboard/ (server, SSE,
-│                         and page/ - the three.js client)
-├── examples/
-│   ├── 01-basic-server/
-│   ├── 02-routing/
-│   ├── 03-middleware/
-│   ├── 04-static-files/
-│   ├── 05-error-handling/
-│   ├── 06-react-app/
-│   ├── 07-body-size-limit/
-│   ├── 08-authentication/
-│   ├── 09-dependency-injection/
-│   ├── 10-validation/
-│   ├── 11-cors/
-│   └── 12-load-balancer/
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   ├── http/
-│   └── fixtures/
-├── doc/
-│   ├── ARCHITECTURE.md
-│   ├── PROJECT_STATE.md
-│   └── features/
-├── README.MD
-├── PLAN.md
-├── CONTRIBUTING.md
+├── src/               Framework source - one class/interface/enum per file
+├── examples/          Twelve numbered runnable apps, one per feature - imports
+│                       the source tree directly
+├── tests/             Vitest unit and integration tests, plus shared fixtures
+├── doc/               ARCHITECTURE.md and doc/features/ - the full internal
+│                       reference these READMEs link out to
+├── package-example/   Mirrors examples/ against the published package shape,
+│                       a genuinely standalone project (own package.json)
+├── scripts/           run-examples.ts - the example smoke test behind `npm run verify`
+├── README.MD              The npm package's own README - what npm bundles for empire-ts
+├── README_DEVELOPMENT.MD  This file - the full framework walkthrough
+├── CHANGELOG.md           Version history, bundled with the npm package
+├── PLAN.md                Full phase-by-phase roadmap
+├── CONTRIBUTING.md        Contribution conventions
 ├── package.json
 └── tsconfig.json
 ```
+
+For the full per-file breakdown - every class, which file it lives in, and
+how the pieces fit together - see [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
 
 ## Motivation
 
