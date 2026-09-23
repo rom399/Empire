@@ -61,7 +61,7 @@ The framework source and its full documentation live in [`src/empire`](src/empir
 
 ## Status
 
-Empire is under active development and is not published to npm. The API is not yet stable and may change between commits.
+Empire is under active development. It's published to npm as [`empire-ts`](https://www.npmjs.com/package/empire-ts), but the API is not yet stable and may change between releases.
 
 ## License
 

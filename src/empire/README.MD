@@ -31,16 +31,16 @@ it is Empire-specific tooling - delete its `node_modules/` and
 
 ### Getting Started
 
-**If empire-ts is published on npm:**
+**Using the published package:**
 
 ```bash
 npm install empire-ts
 ```
 
-**If you're running this from inside the Empire repo, before/without a
-real publish** (which is how `package-example`'s own `package.json` is
-set up right now): build the package first, then point at the tarball
-it produces.
+**If you're running this from inside the Empire repo, to test a change
+before it's published** (which is how `package-example`'s own
+`package.json` is set up right now): build the package first, then
+point at the tarball it produces.
 
 ```bash
 cd ..                  # src/empire

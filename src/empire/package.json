@@ -1,6 +1,6 @@
 {
   "name": "empire-ts",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Experimental TypeScript HTTP framework built from scratch on Node's http module, inspired by ASP.NET Core. API may change without notice - not production-ready.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -7,6 +7,8 @@ experimental notice in [README.MD](README.MD).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-23
+
 ### Added
 
 - A layer-7 load balancer - a learning and local-development tool, not a
