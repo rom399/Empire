@@ -1,6 +1,6 @@
 # Empire
 
-A lightweight TypeScript HTTP framework built from scratch on Node's `http` module - with a small layer-7 load balancer built the same way.
+A lightweight TypeScript HTTP framework on Node's `http` module - with a small layer-7 load balancer built alongside it.
 
 ![The load balancer example running: backends under traffic, a drill-down into one, and one deregistering and rejoining](https://raw.githubusercontent.com/rom399/Empire/main/src/empire/doc/images/load-balancer-example.gif)
 
